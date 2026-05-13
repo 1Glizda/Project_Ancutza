@@ -1,0 +1,86 @@
+# ==============================================================================
+# Unity Generated Files and Folders
+# ==============================================================================
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+
+# Asset meta data should only be ignored when the asset itself is hidden
+!/[Aa]ssets/**/*.meta
+
+# ==============================================================================
+# Unity Auto-Generated Project Files
+# ==============================================================================
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.boop
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# ==============================================================================
+# Unity 3D / URP Specific Generated Files
+# ==============================================================================
+# Unity crash dumps
+sysinfo.txt
+crash_*
+
+# URP / Shader Cache
+# (Usually contained within Library/ but good to catch anomalies)
+*.shadercache
+
+# ==============================================================================
+# OS Generated Files
+# ==============================================================================
+# Windows
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+# Linux
+*~
+.directory
+
+# ==============================================================================
+# IDE Specific Files
+# ==============================================================================
+# Visual Studio / VS Code
+.vscode/
+.vs/
+ExportedObj/
+.consulo/
+*.private
+*.private.meta
+
+# JetBrains Rider / ReSharper
+.idea/
+*.sln.DotSettings.user
+*.sln.DotSettings
+
+# ==============================================================================
+# Package Manager
+# ==============================================================================
+# Ignore everything inside the packages folder except the manifest and lock files
+/[Pp]ackages/*
+!/[Pp]ackages/manifest.json
+!/[Pp]ackages/packages-lock.json
