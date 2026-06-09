@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: 052faaac586de48259a63d0c4782560b
+guid: 0426fcc89d38c0c49a3b9d509d153979
 ScriptedImporter:
   internalIDToNameTable: []
   externalObjects: {}
@@ -12,3 +12,11 @@ ScriptedImporter:
   wrapperCodePath: 
   wrapperClassName: 
   wrapperCodeNamespace: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 355690
+  packageName: Advanced First Person Movement System
+  packageVersion: 1.0
+  assetPath: Assets/StudiosAZE/Advanced First Person Movement System/Inputs/InputSystem_Actions_Movement
+    1.inputactions
+  uploadId: 870592

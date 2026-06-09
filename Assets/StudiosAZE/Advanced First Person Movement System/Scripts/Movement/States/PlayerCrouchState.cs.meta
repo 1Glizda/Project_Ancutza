@@ -1,0 +1,9 @@
+fileFormatVersion: 2
+guid: 7739892f52994a545b2beb7eba91ed99
+AssetOrigin:
+  serializedVersion: 1
+  productId: 355690
+  packageName: Advanced First Person Movement System
+  packageVersion: 1.0
+  assetPath: Assets/StudiosAZE/Advanced First Person Movement System/Scripts/Movement/States/PlayerCrouchState.cs
+  uploadId: 870592

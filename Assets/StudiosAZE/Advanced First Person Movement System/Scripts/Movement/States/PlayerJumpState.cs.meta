@@ -1,0 +1,9 @@
+fileFormatVersion: 2
+guid: 456b4139a4bc9e844a207fbc7585bdef
+AssetOrigin:
+  serializedVersion: 1
+  productId: 355690
+  packageName: Advanced First Person Movement System
+  packageVersion: 1.0
+  assetPath: Assets/StudiosAZE/Advanced First Person Movement System/Scripts/Movement/States/PlayerJumpState.cs
+  uploadId: 870592

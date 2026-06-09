@@ -1,0 +1,9 @@
+fileFormatVersion: 2
+guid: 0989cf05ed451dc44a37e8d19f32b8f5
+AssetOrigin:
+  serializedVersion: 1
+  productId: 355690
+  packageName: Advanced First Person Movement System
+  packageVersion: 1.0
+  assetPath: Assets/StudiosAZE/Advanced First Person Movement System/Scripts/Movement/States/PlayerDodgeState.cs
+  uploadId: 870592
