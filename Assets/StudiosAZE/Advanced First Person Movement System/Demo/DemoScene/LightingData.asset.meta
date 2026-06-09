@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 11fe2e2543b62d146b688c2f96c9b2ad
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 112000000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 355690
+  packageName: Advanced First Person Movement System
+  packageVersion: 1.0
+  assetPath: Assets/StudiosAZE/Advanced First Person Movement System/Demo/DemoScene/LightingData.asset
+  uploadId: 870592

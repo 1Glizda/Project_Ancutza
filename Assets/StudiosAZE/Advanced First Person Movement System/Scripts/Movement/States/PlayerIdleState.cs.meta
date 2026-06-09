@@ -1,0 +1,9 @@
+fileFormatVersion: 2
+guid: 50f0cde493dc4e44abae09599577c88c
+AssetOrigin:
+  serializedVersion: 1
+  productId: 355690
+  packageName: Advanced First Person Movement System
+  packageVersion: 1.0
+  assetPath: Assets/StudiosAZE/Advanced First Person Movement System/Scripts/Movement/States/PlayerIdleState.cs
+  uploadId: 870592
