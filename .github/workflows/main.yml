@@ -1,0 +1,72 @@
+name: WebGL Build and Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+env:
+  UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+  UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+  UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+
+jobs:
+  buildWebGL:
+    name: Build WebGL
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Git LFS Pull
+        run: |
+          git lfs pull
+          git add .
+          git reset --hard
+
+      - name: Restore Library Cache
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-WebGL-v2-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-WebGL-v2-
+
+      - name: Build WebGL
+        uses: game-ci/unity-builder@v4
+        with:
+          targetPlatform: WebGL
+          buildsPath: build
+
+      - name: Upload WebGL Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-WebGL
+          # Change: Adding '/*' ensures we upload the CONTENTS, not the folder itself
+          path: build/WebGL/*
+
+  deployPages:
+    needs: buildWebGL
+    name: Deploy to GitHub Pages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download WebGL Build Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: build-WebGL
+          path: build_files # Keep this a temp folder
+
+      - name: Deploy to GitHub Pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: gh-pages
+          # This will take the contents of build_files and put them at the root of gh-pages
+          folder: build_files
