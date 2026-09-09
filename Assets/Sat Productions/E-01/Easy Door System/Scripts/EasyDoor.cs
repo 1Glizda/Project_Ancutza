@@ -12,6 +12,8 @@ namespace EasyDoorSystem
         [SerializeField] private MovementType movementType = MovementType.Rotation;
         [SerializeField] private float movementSpeed = 2f;
         [SerializeField] private float rotationSpeed = 2f;
+        [Tooltip("Animation curve used for smooth easing (Ease-In-Out).")]
+        [SerializeField] private AnimationCurve movementCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
         [Tooltip("Automatically close after specified time (0 = no auto-close)")]
         [SerializeField] private float autoCloseDelay = 0f;
         [SerializeField] public bool automaticPlayerDetection = false;
@@ -114,19 +116,33 @@ namespace EasyDoorSystem
             Vector3 startPos = transform.localPosition;
             Quaternion targetQuaternion = Quaternion.Euler(targetRot);
 
-            float progress = 0;
-            while (progress < 1)
+            float speed = movementSpeed;
+            if (movementType == MovementType.Rotation)
+                speed = rotationSpeed;
+            else if (movementType == MovementType.Both)
+                speed = Mathf.Max(movementSpeed, rotationSpeed);
+
+            float duration = Mathf.Max(0.05f, 1f / Mathf.Max(0.01f, speed));
+
+            float elapsed = 0f;
+            while (elapsed < duration)
             {
-                progress += Time.deltaTime * Mathf.Max(movementSpeed, rotationSpeed);
+                elapsed += Time.deltaTime;
+                float progress = Mathf.Clamp01(elapsed / duration);
+
+                // Smooth ease-in-out evaluation (custom curve or high-quality smootherstep)
+                float smoothProgress = (movementCurve != null && movementCurve.length >= 2)
+                    ? movementCurve.Evaluate(progress)
+                    : (progress * progress * progress * (progress * (progress * 6f - 15f) + 10f));
 
                 if (movementType != MovementType.Position)
                 {
-                    transform.localRotation = Quaternion.Slerp(startRot, targetQuaternion, progress * rotationSpeed);
+                    transform.localRotation = Quaternion.Slerp(startRot, targetQuaternion, smoothProgress);
                 }
 
                 if (movementType != MovementType.Rotation)
                 {
-                    transform.localPosition = Vector3.Lerp(startPos, targetPos, progress * movementSpeed);
+                    transform.localPosition = Vector3.Lerp(startPos, targetPos, smoothProgress);
                 }
 
                 yield return null;

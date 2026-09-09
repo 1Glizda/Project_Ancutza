@@ -24,6 +24,7 @@ public class DoorInteractionController : MonoBehaviour
     [SerializeField] private bool allowKeyE = true;
 
     private EasyDoor currentDoor;
+    private NPCController currentNPC;
     private DoorHighlighter currentHighlighter;
     private static DoorInteractionController instance;
 
@@ -55,8 +56,8 @@ public class DoorInteractionController : MonoBehaviour
             if (targetCamera == null) return;
         }
 
-        UpdateDoorDetection();
-        HandleDoorInteraction();
+        UpdateDetection();
+        HandleInteraction();
     }
 
     private void HandleGlobalToggleInput()
@@ -98,9 +99,10 @@ public class DoorInteractionController : MonoBehaviour
         SetGlobalHighlight(!GlobalHighlightEnabled);
     }
 
-    private void UpdateDoorDetection()
+    private void UpdateDetection()
     {
         EasyDoor detectedDoor = FindDoorWithinRange();
+        currentNPC = FindNPCWithinRange();
 
         if (detectedDoor != currentDoor)
         {
@@ -137,6 +139,51 @@ public class DoorInteractionController : MonoBehaviour
                 currentHighlighter.SetHighlight(true);
             }
         }
+    }
+
+    private NPCController FindNPCWithinRange()
+    {
+        Ray ray = new Ray(targetCamera.transform.position, targetCamera.transform.forward);
+        RaycastHit hit;
+
+        if (Physics.Raycast(ray, out hit, interactDistance))
+        {
+            NPCController npc = hit.collider.GetComponentInParent<NPCController>();
+            if (npc != null) return npc;
+        }
+
+        if (Physics.SphereCast(ray, 0.35f, out hit, interactDistance))
+        {
+            NPCController npc = hit.collider.GetComponentInParent<NPCController>();
+            if (npc != null) return npc;
+        }
+
+        // Proximity check for NPC
+        NPCController[] allNPCs = FindObjectsByType<NPCController>(FindObjectsSortMode.None);
+        NPCController closestNPC = null;
+        float minDistance = interactDistance;
+
+        Vector3 camPos = targetCamera.transform.position;
+        Vector3 camForward = targetCamera.transform.forward;
+
+        foreach (NPCController npc in allNPCs)
+        {
+            if (npc == null) continue;
+
+            float dist = Vector3.Distance(camPos, npc.transform.position);
+            if (dist <= interactDistance && dist < minDistance)
+            {
+                Vector3 toNPC = (npc.transform.position - camPos).normalized;
+                float angle = Vector3.Angle(camForward, toNPC);
+                if (angle <= 50f)
+                {
+                    minDistance = dist;
+                    closestNPC = npc;
+                }
+            }
+        }
+
+        return closestNPC;
     }
 
     private EasyDoor FindDoorWithinRange()
@@ -198,21 +245,26 @@ public class DoorInteractionController : MonoBehaviour
         return door;
     }
 
-    private void HandleDoorInteraction()
+    private void HandleInteraction()
     {
-        if (currentDoor == null) return;
-
-        // Only actionable if not already moving
-        if (currentDoor.IsMoving) return;
-
         if (IsLeftClickTriggered() || (allowKeyE && IsKeyETriggered()))
         {
-            currentDoor.ToggleDoor();
-
-            // Highlight immediately disappears when door starts moving
-            if (currentHighlighter != null)
+            // Handle Door Interaction
+            if (currentDoor != null && !currentDoor.IsMoving)
             {
-                currentHighlighter.SetHighlight(false);
+                currentDoor.ToggleDoor();
+
+                if (currentHighlighter != null)
+                {
+                    currentHighlighter.SetHighlight(false);
+                }
+                return; // Prioritize door if both are targeted (rare, but good to handle)
+            }
+
+            // Handle NPC Interaction
+            if (currentNPC != null)
+            {
+                currentNPC.StartPlayerConversation();
             }
         }
     }
