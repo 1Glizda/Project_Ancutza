@@ -26,7 +26,7 @@ RenderSettings:
   m_AmbientIntensity: 1
   m_AmbientMode: 0
   m_SubtractiveShadowColor: {r: 0.42, g: 0.478, b: 0.627, a: 1}
-  m_SkyboxMaterial: {fileID: 10304, guid: 0000000000000000f000000000000000, type: 0}
+  m_SkyboxMaterial: {fileID: 2100000, guid: 9af23ba5fa5364ff598888460e0e2759, type: 2}
   m_HaloStrength: 0.5
   m_FlareStrength: 1
   m_FlareFadeSpeed: 3
@@ -94,7 +94,7 @@ LightmapSettings:
     m_TrainingDataDestination: TrainingData
     m_LightProbeSampleCountMultiplier: 4
   m_LightingDataAsset: {fileID: 112000000, guid: 51db59bc076ec4c809c3a8b55d3eca8e, type: 2}
-  m_LightingSettings: {fileID: 4890085278179872738, guid: 81ae286f041014feba994112a0824c60, type: 2}
+  m_LightingSettings: {fileID: 4890085278179872738, guid: b4002c553459e4873859bae63980d866, type: 2}
 --- !u!196 &4
 NavMeshSettings:
   serializedVersion: 2
@@ -1692,10 +1692,8 @@ GameObject:
   m_Component:
   - component: {fileID: 48681538}
   - component: {fileID: 48681537}
-  - component: {fileID: 48681536}
   - component: {fileID: 48681535}
   - component: {fileID: 48681534}
-  - component: {fileID: 48681533}
   - component: {fileID: 48681532}
   m_Layer: 0
   m_Name: NPC_Villager_2
@@ -1727,19 +1725,6 @@ CapsuleCollider:
   m_Height: 1.8
   m_Direction: 1
   m_Center: {x: 0, y: 0.9, z: 0}
---- !u!114 &48681533
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 48681531}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f511302e02c5d409ca82ddb245332cad, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::SpeechBubble
-  bubbleHeight: 2.5
 --- !u!114 &48681534
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1754,7 +1739,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::NPCController
   dialogueData: {fileID: 11400000, guid: b57642c5cf1f84cdfa6546cff6344ae6, type: 2}
   wanderRadius: 15
-  playerInteractRange: 3
   npcChatRange: 4
   npcChatCooldown: 30
   idlePauseMin: 2
@@ -1775,24 +1759,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SpeechBubble
   bubbleHeight: 2.5
---- !u!114 &48681536
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 48681531}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4811f8977937d45c3949cd2287113665, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::BillboardSprite
-  verticalOffset: 0
-  pivotOffset: {x: 0, y: 0, z: 0}
-  billboardMode: 0
-  onDirectionChanged:
-    m_PersistentCalls:
-      m_Calls: []
 --- !u!195 &48681537
 NavMeshAgent:
   m_ObjectHideFlags: 0
@@ -25967,6 +25933,79 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 1.0668001, y: 2.1336002, z: 0.012700018}
   m_Center: {x: -0.0000038146973, y: 1.0667996, z: 0.011162109}
+--- !u!1001 &984035845
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 1586320516402738, guid: f08e2c9c9d052f74cb0c5789c4aca4f0, type: 3}
+      propertyPath: m_Name
+      value: Lamp_01
+      objectReference: {fileID: 0}
+    - target: {fileID: 4266353122975144, guid: f08e2c9c9d052f74cb0c5789c4aca4f0, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 3
+      objectReference: {fileID: 0}
+    - target: {fileID: 4266353122975144, guid: f08e2c9c9d052f74cb0c5789c4aca4f0, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 3
+      objectReference: {fileID: 0}
+    - target: {fileID: 4266353122975144, guid: f08e2c9c9d052f74cb0c5789c4aca4f0, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 3
+      objectReference: {fileID: 0}
+    - target: {fileID: 4266353122975144, guid: f08e2c9c9d052f74cb0c5789c4aca4f0, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -56.42
+      objectReference: {fileID: 0}
+    - target: {fileID: 4266353122975144, guid: f08e2c9c9d052f74cb0c5789c4aca4f0, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 7.71
+      objectReference: {fileID: 0}
+    - target: {fileID: 4266353122975144, guid: f08e2c9c9d052f74cb0c5789c4aca4f0, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 91.12
+      objectReference: {fileID: 0}
+    - target: {fileID: 4266353122975144, guid: f08e2c9c9d052f74cb0c5789c4aca4f0, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4266353122975144, guid: f08e2c9c9d052f74cb0c5789c4aca4f0, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0.000000021855694
+      objectReference: {fileID: 0}
+    - target: {fileID: 4266353122975144, guid: f08e2c9c9d052f74cb0c5789c4aca4f0, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: -0.00000008742278
+      objectReference: {fileID: 0}
+    - target: {fileID: 4266353122975144, guid: f08e2c9c9d052f74cb0c5789c4aca4f0, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 1.9106855e-15
+      objectReference: {fileID: 0}
+    - target: {fileID: 4266353122975144, guid: f08e2c9c9d052f74cb0c5789c4aca4f0, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4266353122975144, guid: f08e2c9c9d052f74cb0c5789c4aca4f0, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4266353122975144, guid: f08e2c9c9d052f74cb0c5789c4aca4f0, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4266353122975144, guid: f08e2c9c9d052f74cb0c5789c4aca4f0, type: 3}
+      propertyPath: m_ConstrainProportionsScale
+      value: 1
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: f08e2c9c9d052f74cb0c5789c4aca4f0, type: 3}
 --- !u!1 &984742427
 GameObject:
   m_ObjectHideFlags: 0
@@ -30249,10 +30288,8 @@ GameObject:
   m_Component:
   - component: {fileID: 1157130880}
   - component: {fileID: 1157130879}
-  - component: {fileID: 1157130878}
   - component: {fileID: 1157130877}
   - component: {fileID: 1157130876}
-  - component: {fileID: 1157130875}
   - component: {fileID: 1157130874}
   m_Layer: 0
   m_Name: NPC_Villager_1
@@ -30284,19 +30321,6 @@ CapsuleCollider:
   m_Height: 1.8
   m_Direction: 1
   m_Center: {x: 0, y: 0.9, z: 0}
---- !u!114 &1157130875
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1157130873}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f511302e02c5d409ca82ddb245332cad, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::SpeechBubble
-  bubbleHeight: 2.5
 --- !u!114 &1157130876
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -30311,7 +30335,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::NPCController
   dialogueData: {fileID: 11400000, guid: b57642c5cf1f84cdfa6546cff6344ae6, type: 2}
   wanderRadius: 15
-  playerInteractRange: 3
   npcChatRange: 4
   npcChatCooldown: 30
   idlePauseMin: 2
@@ -30332,24 +30355,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SpeechBubble
   bubbleHeight: 2.5
---- !u!114 &1157130878
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1157130873}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4811f8977937d45c3949cd2287113665, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::BillboardSprite
-  verticalOffset: 0
-  pivotOffset: {x: 0, y: 0, z: 0}
-  billboardMode: 0
-  onDirectionChanged:
-    m_PersistentCalls:
-      m_Calls: []
 --- !u!195 &1157130879
 NavMeshAgent:
   m_ObjectHideFlags: 0
@@ -41488,7 +41493,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!108 &1560107146
 Light:
   m_ObjectHideFlags: 0
@@ -45234,10 +45239,8 @@ GameObject:
   m_Component:
   - component: {fileID: 1679520235}
   - component: {fileID: 1679520234}
-  - component: {fileID: 1679520233}
   - component: {fileID: 1679520232}
   - component: {fileID: 1679520231}
-  - component: {fileID: 1679520230}
   - component: {fileID: 1679520229}
   m_Layer: 0
   m_Name: NPC_Villager_3
@@ -45269,19 +45272,6 @@ CapsuleCollider:
   m_Height: 1.8
   m_Direction: 1
   m_Center: {x: 0, y: 0.9, z: 0}
---- !u!114 &1679520230
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1679520228}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f511302e02c5d409ca82ddb245332cad, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::SpeechBubble
-  bubbleHeight: 2.5
 --- !u!114 &1679520231
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -45296,7 +45286,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::NPCController
   dialogueData: {fileID: 11400000, guid: b57642c5cf1f84cdfa6546cff6344ae6, type: 2}
   wanderRadius: 15
-  playerInteractRange: 3
   npcChatRange: 4
   npcChatCooldown: 30
   idlePauseMin: 2
@@ -45317,24 +45306,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SpeechBubble
   bubbleHeight: 2.5
---- !u!114 &1679520233
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1679520228}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4811f8977937d45c3949cd2287113665, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::BillboardSprite
-  verticalOffset: 0
-  pivotOffset: {x: 0, y: 0, z: 0}
-  billboardMode: 0
-  onDirectionChanged:
-    m_PersistentCalls:
-      m_Calls: []
 --- !u!195 &1679520234
 NavMeshAgent:
   m_ObjectHideFlags: 0
@@ -58116,3 +58087,4 @@ SceneRoots:
   - {fileID: 1157130880}
   - {fileID: 48681538}
   - {fileID: 1679520235}
+  - {fileID: 984035845}
