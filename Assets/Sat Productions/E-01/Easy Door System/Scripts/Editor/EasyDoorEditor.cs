@@ -1,4 +1,4 @@
-﻿namespace EasyDoorSystem
+namespace EasyDoorSystem
 {
     using UnityEditor;
     using UnityEngine;
@@ -75,6 +75,7 @@
             EditorGUILayout.PropertyField(serializedDoor.FindProperty("movementType"));
             EditorGUILayout.PropertyField(serializedDoor.FindProperty("movementSpeed"));
             EditorGUILayout.PropertyField(serializedDoor.FindProperty("rotationSpeed"));
+            EditorGUILayout.PropertyField(serializedDoor.FindProperty("movementCurve"));
             EditorGUILayout.PropertyField(serializedDoor.FindProperty("autoCloseDelay"));
             EditorGUILayout.PropertyField(serializedDoor.FindProperty("automaticPlayerDetection"));
 
