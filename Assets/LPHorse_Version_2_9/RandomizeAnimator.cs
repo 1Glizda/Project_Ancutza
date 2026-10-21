@@ -9,7 +9,7 @@ public class RandomizeAnimator : MonoBehaviour
     void Start()
     {
         Animator anim = GetComponent<Animator>();
-        if (anim != null)
+        if (anim != null && anim.runtimeAnimatorController != null)
         {
             anim.speed = Random.Range(minSpeed, maxSpeed);
             AnimatorStateInfo state = anim.GetCurrentAnimatorStateInfo(0);

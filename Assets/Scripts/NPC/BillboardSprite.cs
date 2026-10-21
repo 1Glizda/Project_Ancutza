@@ -12,6 +12,7 @@ public class BillboardSprite : MonoBehaviour
 {
     [SerializeField] private float verticalOffset = 0f;
     [SerializeField] private Vector3 pivotOffset = Vector3.zero;
+    [SerializeField] private float lyingVerticalOffset = 0.05f;
     [SerializeField] private BillboardMode billboardMode = BillboardMode.Single;
     [SerializeField] private UnityEvent<int> onDirectionChanged;
 
@@ -23,10 +24,31 @@ public class BillboardSprite : MonoBehaviour
     private int lastDirectionIndex = -1;
     private Vector3 initialLocalPosition;
 
+    public bool IsLying => isLying;
+
     private void Awake()
     {
-        myTransform = transform;
-        initialLocalPosition = myTransform.localPosition;
+        if (myTransform == null)
+            myTransform = transform;
+        if (myTransform.localPosition != Vector3.zero && myTransform.localPosition.y > 0.5f)
+            initialLocalPosition = myTransform.localPosition;
+        else
+            initialLocalPosition = new Vector3(0f, 1.5f, 0f);
+
+        if (!isLying)
+        {
+            myTransform.localPosition = initialLocalPosition + pivotOffset + new Vector3(0f, verticalOffset, 0f);
+            myTransform.localRotation = Quaternion.identity;
+        }
+    }
+
+    private void OnValidate()
+    {
+        if (!isLying && (transform.localRotation == Quaternion.Euler(90f, 180f, 0f) || transform.localPosition.y < 0.5f))
+        {
+            transform.localRotation = Quaternion.identity;
+            transform.localPosition = new Vector3(0f, 1.5f, 0f);
+        }
     }
 
     private void OnEnable()
@@ -36,8 +58,21 @@ public class BillboardSprite : MonoBehaviour
 
     private void LateUpdate()
     {
-        if (mainCamera == null)
+        if (isLying)
+        {
+            // When lying down on a bed, the sprite lays flat horizontally on the mattress (XZ plane),
+            // with head toward the headboard and feet toward the footboard, aligned with the bed.
+            myTransform.localRotation = Quaternion.Euler(90f, 180f, 0f);
+            myTransform.localPosition = new Vector3(0f, lyingVerticalOffset, 0f);
             return;
+        }
+
+        if (mainCamera == null)
+        {
+            mainCamera = Camera.main;
+            if (mainCamera == null)
+                return;
+        }
 
         Vector3 camPos = mainCamera.transform.position;
         Vector3 myPos = myTransform.position;
@@ -48,19 +83,7 @@ public class BillboardSprite : MonoBehaviour
         if (directionToCamera.sqrMagnitude > 0.001f)
         {
             directionToCamera.Normalize();
-
-            Quaternion targetRotation;
-
-            if (isLying)
-            {
-                targetRotation = Quaternion.LookRotation(directionToCamera) * Quaternion.Euler(90f, 0f, 0f);
-            }
-            else
-            {
-                targetRotation = Quaternion.LookRotation(directionToCamera);
-            }
-
-            myTransform.rotation = targetRotation;
+            myTransform.rotation = Quaternion.LookRotation(directionToCamera);
         }
 
         float currentVerticalOffset = verticalOffset;
@@ -128,5 +151,26 @@ public class BillboardSprite : MonoBehaviour
     public void SetLyingMode(bool lying)
     {
         isLying = lying;
+        if (myTransform == null)
+            myTransform = transform;
+
+        if (initialLocalPosition == Vector3.zero || initialLocalPosition.y < 0.5f)
+        {
+            if (myTransform.localPosition != Vector3.zero && myTransform.localPosition.y > 0.5f)
+                initialLocalPosition = myTransform.localPosition;
+            else
+                initialLocalPosition = new Vector3(0f, 1.5f, 0f);
+        }
+
+        if (isLying)
+        {
+            myTransform.localRotation = Quaternion.Euler(90f, 180f, 0f);
+            myTransform.localPosition = new Vector3(0f, lyingVerticalOffset, 0f);
+        }
+        else
+        {
+            myTransform.localPosition = initialLocalPosition + pivotOffset + new Vector3(0f, verticalOffset, 0f);
+            myTransform.localRotation = Quaternion.identity;
+        }
     }
 }

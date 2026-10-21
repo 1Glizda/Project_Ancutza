@@ -106,7 +106,7 @@ public class DoorInteractionController : MonoBehaviour
 
         if (detectedDoor != currentDoor)
         {
-            // Disable highlight on previous door
+            // Disable highlight on previous door / chest
             if (currentHighlighter != null)
             {
                 currentHighlighter.SetHighlight(false);
@@ -117,10 +117,22 @@ public class DoorInteractionController : MonoBehaviour
 
             if (currentDoor != null)
             {
-                currentHighlighter = currentDoor.GetComponent<DoorHighlighter>();
+                // Look for DoorHighlighter on parent (for chests), children, or self
+                currentHighlighter = currentDoor.GetComponentInParent<DoorHighlighter>();
                 if (currentHighlighter == null)
                 {
-                    currentHighlighter = currentDoor.gameObject.AddComponent<DoorHighlighter>();
+                    currentHighlighter = currentDoor.GetComponentInChildren<DoorHighlighter>();
+                }
+                if (currentHighlighter == null)
+                {
+                    currentHighlighter = currentDoor.GetComponent<DoorHighlighter>();
+                }
+
+                // If not found, add to root so the entire chest or door gets highlighted
+                if (currentHighlighter == null)
+                {
+                    Transform rootTransform = GetInteractableRoot(currentDoor);
+                    currentHighlighter = rootTransform.gameObject.AddComponent<DoorHighlighter>();
                 }
             }
         }
@@ -130,12 +142,12 @@ public class DoorInteractionController : MonoBehaviour
         {
             if (!GlobalHighlightEnabled || currentDoor.IsMoving)
             {
-                // Highlight disappears while the door is moving or when globally disabled
+                // Highlight disappears while the door/chest is moving or when globally disabled
                 currentHighlighter.SetHighlight(false);
             }
             else
             {
-                // Reappears when the door is in actionable position
+                // Reappears when the door/chest is in actionable position
                 currentHighlighter.SetHighlight(true);
             }
         }
@@ -188,61 +200,189 @@ public class DoorInteractionController : MonoBehaviour
 
     private EasyDoor FindDoorWithinRange()
     {
-        Ray ray = new Ray(targetCamera.transform.position, targetCamera.transform.forward);
-        RaycastHit hit;
-
-        // 1. Direct raycast up to 4 units
-        if (Physics.Raycast(ray, out hit, interactDistance))
+        if (targetCamera == null)
         {
-            EasyDoor door = ResolveEasyDoor(hit.collider);
-            if (door != null) return door;
+            targetCamera = Camera.main;
+            if (targetCamera == null) targetCamera = GetComponentInChildren<Camera>();
+            if (targetCamera == null) return null;
         }
-
-        // 2. Thick SphereCast up to 4 units for forgiving aiming
-        if (Physics.SphereCast(ray, 0.35f, out hit, interactDistance))
-        {
-            EasyDoor door = ResolveEasyDoor(hit.collider);
-            if (door != null) return door;
-        }
-
-        // 3. Proximity check for any EasyDoor within 4 units in front of player
-        EasyDoor[] allDoors = FindObjectsByType<EasyDoor>(FindObjectsSortMode.None);
-        EasyDoor closestDoor = null;
-        float minDistance = interactDistance;
 
         Vector3 camPos = targetCamera.transform.position;
         Vector3 camForward = targetCamera.transform.forward;
+        Ray ray = new Ray(camPos, camForward);
+
+        // 1. Direct raycast up to interactDistance using RaycastAll to bypass player colliders
+        RaycastHit[] hits = Physics.RaycastAll(ray, interactDistance);
+        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+
+        foreach (RaycastHit hit in hits)
+        {
+            if (hit.collider == null) continue;
+            if (hit.collider.transform.IsChildOf(transform) || hit.collider.transform == transform) continue;
+            if (hit.collider.isTrigger) continue;
+
+            EasyDoor directDoor = ResolveEasyDoor(hit.collider);
+            if (directDoor != null)
+            {
+                return directDoor;
+            }
+
+            // Hit an opaque non-door obstacle in direct line of sight (e.g. wall)
+            break;
+        }
+
+        // 2. Thick SphereCast up to interactDistance for forgiving aiming
+        RaycastHit[] sphereHits = Physics.SphereCastAll(ray, 0.25f, interactDistance);
+        System.Array.Sort(sphereHits, (a, b) => a.distance.CompareTo(b.distance));
+
+        foreach (RaycastHit sHit in sphereHits)
+        {
+            if (sHit.collider == null) continue;
+            if (sHit.collider.transform.IsChildOf(transform) || sHit.collider.transform == transform) continue;
+            if (sHit.collider.isTrigger) continue;
+
+            EasyDoor sDoor = ResolveEasyDoor(sHit.collider);
+            if (sDoor != null)
+            {
+                return sDoor;
+            }
+        }
+
+        // 3. Aim-based candidate selection: if both chest and door are in range, pick ONLY the one the camera points to!
+        EasyDoor[] allDoors = FindObjectsByType<EasyDoor>(FindObjectsSortMode.None);
+        EasyDoor bestCandidate = null;
+        float bestScore = float.MaxValue;
+        const float maxAimAngle = 45f; // Must be within reasonable view cone in front of camera
 
         foreach (EasyDoor door in allDoors)
         {
             if (door == null) continue;
 
-            Collider col = door.GetComponentInChildren<Collider>();
-            Vector3 doorPos = col != null ? col.bounds.center : door.transform.position;
+            Vector3 center = GetInteractableCenter(door);
+            Vector3 toTarget = center - camPos;
+            float dist = toTarget.magnitude;
 
-            float dist = Vector3.Distance(camPos, doorPos);
-            if (dist <= interactDistance && dist < minDistance)
+            if (dist > interactDistance) continue;
+
+            Vector3 dirToTarget = toTarget.normalized;
+            float angle = Vector3.Angle(camForward, dirToTarget);
+            if (angle > maxAimAngle) continue;
+
+            // Check line-of-sight to ensure not targeting through walls
+            if (!HasLineOfSight(camPos, center, door, dist)) continue;
+
+            // Score: primarily the angle (camera aim direction), with a small distance factor
+            float score = angle + (dist / interactDistance) * 2.0f;
+            if (score < bestScore)
             {
-                Vector3 toDoor = (doorPos - camPos).normalized;
-                float angle = Vector3.Angle(camForward, toDoor);
-                if (angle <= 50f)
-                {
-                    minDistance = dist;
-                    closestDoor = door;
-                }
+                bestScore = score;
+                bestCandidate = door;
             }
         }
 
-        return closestDoor;
+        return bestCandidate;
+    }
+
+    private Transform GetInteractableRoot(EasyDoor door)
+    {
+        if (door == null) return null;
+        if (door.transform.parent != null && door.transform.parent.name.ToLower().Contains("chest"))
+        {
+            return door.transform.parent;
+        }
+        return door.transform;
+    }
+
+    private Vector3 GetInteractableCenter(EasyDoor door)
+    {
+        Transform root = GetInteractableRoot(door);
+        Renderer[] renderers = root.GetComponentsInChildren<Renderer>();
+        if (renderers != null && renderers.Length > 0)
+        {
+            Bounds b = renderers[0].bounds;
+            bool foundFirst = false;
+            foreach (Renderer r in renderers)
+            {
+                if (r == null || r.name.Contains("BlurOutline")) continue;
+                if (!foundFirst)
+                {
+                    b = r.bounds;
+                    foundFirst = true;
+                }
+                else
+                {
+                    b.Encapsulate(r.bounds);
+                }
+            }
+            if (foundFirst) return b.center;
+        }
+
+        Collider[] colliders = root.GetComponentsInChildren<Collider>();
+        if (colliders != null && colliders.Length > 0)
+        {
+            Bounds b = colliders[0].bounds;
+            for (int i = 1; i < colliders.Length; i++)
+            {
+                if (colliders[i] != null && !colliders[i].isTrigger)
+                {
+                    b.Encapsulate(colliders[i].bounds);
+                }
+            }
+            return b.center;
+        }
+
+        return root.position;
+    }
+
+    private bool HasLineOfSight(Vector3 camPos, Vector3 targetCenter, EasyDoor door, float maxDist)
+    {
+        Vector3 dir = targetCenter - camPos;
+        float dist = dir.magnitude;
+        if (dist < 0.05f) return true;
+
+        RaycastHit[] hits = Physics.RaycastAll(camPos, dir.normalized, dist);
+        Transform root = GetInteractableRoot(door);
+
+        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+
+        foreach (RaycastHit hit in hits)
+        {
+            if (hit.collider == null) continue;
+            if (hit.collider.transform.IsChildOf(transform) || hit.collider.transform == transform) continue;
+            if (hit.collider.isTrigger) continue;
+
+            // If hit belongs to the interactable, line of sight is clear
+            if (hit.collider.transform.IsChildOf(root) || hit.collider.transform == root)
+            {
+                return true;
+            }
+
+            // Hit an obstacle in between before reaching target
+            if (hit.distance < dist - 0.15f)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private EasyDoor ResolveEasyDoor(Collider col)
     {
         if (col == null) return null;
-        EasyDoor door = col.GetComponentInParent<EasyDoor>();
-        if (door == null) door = col.GetComponentInChildren<EasyDoor>();
-        if (door == null) door = col.GetComponent<EasyDoor>();
-        return door;
+        // 1. Direct component on collider
+        EasyDoor door = col.GetComponent<EasyDoor>();
+        if (door != null) return door;
+
+        // 2. Child component (e.g. col is chest, EasyDoor is on chest_top)
+        door = col.GetComponentInChildren<EasyDoor>();
+        if (door != null) return door;
+
+        // 3. Parent component (e.g. col is Barn wood, EasyDoor is on _movable)
+        door = col.GetComponentInParent<EasyDoor>();
+        if (door != null) return door;
+
+        return null;
     }
 
     private void HandleInteraction()
