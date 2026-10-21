@@ -38,6 +38,7 @@ public class NPCController : MonoBehaviour
     private float searchTimer = 0f;
     private float lastChatTime = -9999f;
     private float speechTimer = 0f;
+    private float stuckTimer = 0f;
     
     private SmartObject currentSmartObject;
     private Transform playerTransform;
@@ -74,9 +75,17 @@ public class NPCController : MonoBehaviour
 
     private void Update()
     {
-        if (agent != null && !agent.isOnNavMesh)
+        if (agent != null && agent.enabled && !agent.isOnNavMesh)
         {
-            Debug.LogWarning($"[NPC] {gameObject.name} is NOT on NavMesh! Pos: {transform.position}");
+            if (NavMesh.SamplePosition(transform.position, out NavMeshHit hit, 5.0f, NavMesh.AllAreas))
+            {
+                agent.Warp(hit.position);
+            }
+            else
+            {
+                // Wait until placed on a valid NavMesh
+                return;
+            }
         }
 
         switch (CurrentState)
@@ -158,10 +167,24 @@ public class NPCController : MonoBehaviour
 
     private void UpdateWandering()
     {
-        // DEBUG: print agent state every few frames
-        if (Time.frameCount % 60 == 0)
+        // Check for forward obstacle to ensure NPC never penetrates any gameobject collider
+        CheckForwardObstacle();
+
+        // Check if agent is stuck trying to push into an obstacle
+        if (agent.hasPath && !agent.pathPending && agent.velocity.sqrMagnitude < 0.05f)
         {
-            Debug.Log($"[NPC] {gameObject.name} Wandering. pos={transform.position}, dest={agent.destination}, dist={agent.remainingDistance}, hasPath={agent.hasPath}, vel={agent.velocity.magnitude}");
+            stuckTimer += Time.deltaTime;
+            if (stuckTimer > 1.2f)
+            {
+                stuckTimer = 0f;
+                if (agent.enabled) agent.ResetPath();
+                EnterIdle();
+                return;
+            }
+        }
+        else
+        {
+            stuckTimer = 0f;
         }
 
         if (!agent.pathPending && agent.remainingDistance <= agent.stoppingDistance)
@@ -169,6 +192,34 @@ public class NPCController : MonoBehaviour
             if (!agent.hasPath || agent.velocity.sqrMagnitude == 0f)
             {
                 EnterIdle();
+            }
+        }
+    }
+
+    private void CheckForwardObstacle()
+    {
+        if (!agent.enabled || !agent.hasPath) return;
+
+        Vector3 moveDir = agent.velocity;
+        if (moveDir.sqrMagnitude < 0.05f) return;
+        moveDir.y = 0f;
+        moveDir.Normalize();
+
+        Vector3 sphereOrigin = transform.position + Vector3.up * 0.8f;
+        float checkDist = agent.radius + 0.35f;
+
+        if (Physics.SphereCast(sphereOrigin, 0.25f, moveDir, out RaycastHit hit, checkDist))
+        {
+            if (hit.collider != null && !hit.collider.isTrigger)
+            {
+                string cName = hit.collider.name.ToLower();
+                if (!cName.Contains("platform") && !cName.Contains("floor") && cName != "terrain" &&
+                    !hit.collider.transform.IsChildOf(transform) && !hit.collider.CompareTag("Player"))
+                {
+                    // Solid gameobject in immediate path: stop immediately to never go past or clip into it
+                    if (agent.enabled) agent.ResetPath();
+                    EnterIdle();
+                }
             }
         }
     }
@@ -186,7 +237,12 @@ public class NPCController : MonoBehaviour
             CurrentState = NPCState.MovingToInteractable;
             if (agent.enabled)
             {
-                agent.SetDestination(obj.InteractionAnchor.position);
+                Vector3 dest = obj.InteractionAnchor.position;
+                if (NavMesh.SamplePosition(dest, out NavMeshHit hit, 2.5f, NavMesh.AllAreas))
+                {
+                    dest = hit.position;
+                }
+                agent.SetDestination(dest);
             }
             return true;
         }
@@ -201,7 +257,15 @@ public class NPCController : MonoBehaviour
             return;
         }
 
-        if (!agent.pathPending && agent.remainingDistance <= agent.stoppingDistance)
+        if (agent == null || !agent.enabled || !agent.isOnNavMesh)
+        {
+            return;
+        }
+
+        bool arrived = !agent.pathPending && (agent.remainingDistance <= agent.stoppingDistance || 
+            (agent.hasPath && agent.remainingDistance <= 1.2f && agent.velocity.sqrMagnitude < 0.01f));
+
+        if (arrived)
         {
             StartUsingSmartObject();
         }
@@ -266,7 +330,7 @@ public class NPCController : MonoBehaviour
         billboard.SetLyingMode(false);
 
         agent.enabled = true;
-        if (NavMesh.SamplePosition(transform.position, out NavMeshHit hit, 2.0f, NavMesh.AllAreas))
+        if (NavMesh.SamplePosition(transform.position, out NavMeshHit hit, 3.0f, NavMesh.AllAreas))
         {
             agent.Warp(hit.position);
         }
@@ -376,15 +440,19 @@ public class NPCController : MonoBehaviour
             Vector2 randomCircle = Random.insideUnitCircle * range;
             Vector3 randomPoint = center + new Vector3(randomCircle.x, 0, randomCircle.y);
             NavMeshHit hit;
-            if (NavMesh.SamplePosition(randomPoint, out hit, 4.0f, NavMesh.AllAreas))
+            if (NavMesh.SamplePosition(randomPoint, out hit, 1.5f, NavMesh.AllAreas))
             {
-                // Verify the point is actually reachable
-                if (NavMesh.CalculatePath(transform.position, hit.position, NavMesh.AllAreas, path))
+                // Ensure sampled point is not inside or immediately adjacent to any collider
+                if (!Physics.CheckSphere(hit.position + Vector3.up * 0.8f, 0.35f, ~0, QueryTriggerInteraction.Ignore))
                 {
-                    if (path.status == NavMeshPathStatus.PathComplete)
+                    // Verify the point is actually reachable
+                    if (NavMesh.CalculatePath(transform.position, hit.position, NavMesh.AllAreas, path))
                     {
-                        result = hit.position;
-                        return true;
+                        if (path.status == NavMeshPathStatus.PathComplete)
+                        {
+                            result = hit.position;
+                            return true;
+                        }
                     }
                 }
             }

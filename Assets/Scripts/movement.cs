@@ -14,6 +14,19 @@ public class movement : MonoBehaviour
     public float sensitivity = 2f;
     public Transform cameraTransform;
 
+    [Header("Book Inspection Mode")]
+    [Tooltip("Controls whether the player can walk, jump, and sprint.")]
+    public bool canMove = true;
+    public static bool MovementLocked = false;
+
+    [Tooltip("Locks the camera into a strictly contained inspection window over the book.")]
+    public bool isInspectionMode = false;
+    public float inspectionCenterYaw = 0f;
+    public float maxInspectionYawDelta = 14f;
+    public float minInspectionPitch = 38f;
+    public float maxInspectionPitch = 65f;
+    private float currentInspectionYawOffset = 0f;
+
     [Header("Sprint")]
     public float sprintMulti = 1.6f;
     public float maxStamina = 5f;
@@ -73,19 +86,49 @@ public class movement : MonoBehaviour
 
     void HandleLook()
     {
-
         float mouseX = look.x * sensitivity;
         float mouseY = look.y * sensitivity;
 
         xRotation -= mouseY;
-        xRotation = Mathf.Clamp(xRotation , -85f , 85f);
 
-        cameraTransform.localRotation = Quaternion.Euler(xRotation, 0, 0);
-        transform.Rotate(Vector3.up * mouseX);
+        if (isInspectionMode)
+        {
+            // Contained inspection view over the book
+            xRotation = Mathf.Clamp(xRotation, minInspectionPitch, maxInspectionPitch);
+
+            currentInspectionYawOffset += mouseX;
+            currentInspectionYawOffset = Mathf.Clamp(currentInspectionYawOffset, -maxInspectionYawDelta, maxInspectionYawDelta);
+
+            cameraTransform.localRotation = Quaternion.Euler(xRotation, 0, 0);
+            transform.rotation = Quaternion.Euler(0f, inspectionCenterYaw + currentInspectionYawOffset, 0f);
+        }
+        else
+        {
+            currentInspectionYawOffset = 0f;
+            xRotation = Mathf.Clamp(xRotation, -85f, 85f);
+            cameraTransform.localRotation = Quaternion.Euler(xRotation, 0, 0);
+            transform.Rotate(Vector3.up * mouseX);
+        }
     }
 
     void HandleMove()
     {
+        // Disable movement while reading the check-in book
+        if (!canMove || MovementLocked)
+        {
+            if (controller.isGrounded)
+            {
+                velocity.x = 0f;
+                velocity.z = 0f;
+                if (velocity.y < 0)
+                    velocity.y = -2f;
+            }
+
+            velocity.y += gravity * Time.deltaTime;
+            controller.Move(velocity * Time.deltaTime);
+            return;
+        }
+
         Vector3 inputDir = transform.right * move.x + transform.forward * move.y;
 
         float currentSpeed = speed;
@@ -109,7 +152,7 @@ public class movement : MonoBehaviour
 
     void HandleJump()
     {
-        if (!controller.isGrounded) return;
+        if (!canMove || MovementLocked || !controller.isGrounded) return;
 
         Vector3 inputDir = transform.right * move.x + transform.forward * move.y;
 
@@ -121,6 +164,11 @@ public class movement : MonoBehaviour
 
     void HandleSprint()
     {
+        if (!canMove || MovementLocked)
+        {
+            isSprinting = false;
+            return;
+        }
 
         if (isSprinting && move.magnitude > 0.1f && stamina > 0f)
         {
