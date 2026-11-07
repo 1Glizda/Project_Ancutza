@@ -17,6 +17,48 @@ namespace AZE.AdvancedFirstPerson
 
         private float _cameraPitch = 0f;
 
+        public bool IsFreeLookLocked { get; private set; }
+        public float CameraPitch => _cameraPitch;
+
+        /// <summary>
+        /// Locks or unlocks free camera look/rotation.
+        /// </summary>
+        public void SetFreeLookLocked(bool locked)
+        {
+            IsFreeLookLocked = locked;
+            if (!locked && CameraTransform != null)
+            {
+                float rawPitch = CameraTransform.localEulerAngles.x;
+                if (rawPitch > 180f) rawPitch -= 360f;
+                _cameraPitch = Mathf.Clamp(rawPitch, TopClamp, BottomClamp);
+            }
+        }
+
+        /// <summary>
+        /// Aligns the player body yaw and camera pitch directly toward a target orientation.
+        /// </summary>
+        public void SetViewAlignment(float worldYaw, float pitch)
+        {
+            transform.rotation = Quaternion.Euler(0f, worldYaw, 0f);
+            _cameraPitch = Mathf.Clamp(pitch, TopClamp, BottomClamp);
+            if (CameraTransform != null)
+            {
+                CameraTransform.localRotation = Quaternion.Euler(_cameraPitch, 0f, 0f);
+            }
+        }
+
+        /// <summary>
+        /// Sets the vertical camera pitch directly (used for cinematic camera cuts and pans).
+        /// </summary>
+        public void SetPitch(float pitch)
+        {
+            _cameraPitch = Mathf.Clamp(pitch, TopClamp, BottomClamp);
+            if (CameraTransform != null)
+            {
+                CameraTransform.localRotation = Quaternion.Euler(_cameraPitch, 0f, 0f);
+            }
+        }
+
         private void Awake()
         {
             Cursor.lockState = CursorLockMode.Locked;
@@ -30,6 +72,8 @@ namespace AZE.AdvancedFirstPerson
 
         private void HandleRotation()
         {
+            if (IsFreeLookLocked || inputHandler == null) return;
+
             Vector2 lookInput = inputHandler.LookInput;
             if (lookInput.sqrMagnitude < 0.0001f) return;
 
@@ -57,7 +101,10 @@ namespace AZE.AdvancedFirstPerson
             _cameraPitch -= pitch;
             _cameraPitch = Mathf.Clamp(_cameraPitch, TopClamp, BottomClamp);
 
-            CameraTransform.localRotation = Quaternion.Euler(_cameraPitch, 0f, 0f);
+            if (CameraTransform != null)
+            {
+                CameraTransform.localRotation = Quaternion.Euler(_cameraPitch, 0f, 0f);
+            }
         }
     }
 }

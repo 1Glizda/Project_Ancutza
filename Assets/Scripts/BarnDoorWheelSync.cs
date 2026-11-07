@@ -31,6 +31,7 @@ public class BarnDoorWheelSync : MonoBehaviour
 
     [SerializeField] private Vector3 wheel01InitialEuler;
     [SerializeField] private Vector3 wheel02InitialEuler;
+    private float lastSyncedX = float.NaN;
 
     private void Awake()
     {
@@ -138,11 +139,6 @@ public class BarnDoorWheelSync : MonoBehaviour
         }
     }
 
-    private void Update()
-    {
-        SyncWheels();
-    }
-
     private void LateUpdate()
     {
         SyncWheels();
@@ -159,6 +155,12 @@ public class BarnDoorWheelSync : MonoBehaviour
         }
 
         float currentX = useLocalPosition ? movableTransform.localPosition.x : movableTransform.position.x;
+        if (Application.isPlaying && Mathf.Approximately(currentX, lastSyncedX))
+        {
+            return;
+        }
+        lastSyncedX = currentX;
+
         float deltaX = currentX - referenceX;
 
         // When movable moves on x with +0.1, rotate +360 degrees on Z.

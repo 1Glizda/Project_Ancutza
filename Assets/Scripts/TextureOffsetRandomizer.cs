@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 #if UNITY_EDITOR
@@ -23,6 +24,9 @@ public class TextureOffsetRandomizer : MonoBehaviour
     [HideInInspector] [SerializeField] private Vector4 appliedST = new Vector4(1, 1, 0, 0);
     [HideInInspector] [SerializeField] private bool hasBeenRandomized = false;
 
+    private Material baseSharedMaterial;
+    private static readonly Dictionary<(Material, Vector4), Material> s_SrpBatcherMaterialCache = new Dictionary<(Material, Vector4), Material>();
+
     void Start()
     {
         if (!hasBeenRandomized)
@@ -47,11 +51,16 @@ public class TextureOffsetRandomizer : MonoBehaviour
         Renderer renderer = GetComponent<Renderer>();
         if (renderer == null || renderer.sharedMaterial == null) return;
 
+        if (baseSharedMaterial == null)
+        {
+            baseSharedMaterial = renderer.sharedMaterial;
+        }
+
         string stPropertyName = texturePropertyName + "_ST";
         
         // Fetch current Scale/Offset values from the material as a base
-        Vector4 currentST = renderer.sharedMaterial.HasProperty(stPropertyName) 
-            ? renderer.sharedMaterial.GetVector(stPropertyName) 
+        Vector4 currentST = baseSharedMaterial.HasProperty(stPropertyName) 
+            ? baseSharedMaterial.GetVector(stPropertyName) 
             : new Vector4(1, 1, 0, 0);
 
         float offsetX = randomizeOffset ? Random.Range(0f, 1f) : currentST.z;
@@ -69,14 +78,46 @@ public class TextureOffsetRandomizer : MonoBehaviour
     public void ApplyProperties()
     {
         Renderer renderer = GetComponent<Renderer>();
-        if (renderer == null) return;
-
-        MaterialPropertyBlock propBlock = new MaterialPropertyBlock();
-        renderer.GetPropertyBlock(propBlock);
+        if (renderer == null || renderer.sharedMaterial == null) return;
 
         string stPropertyName = texturePropertyName + "_ST";
-        propBlock.SetVector(stPropertyName, appliedST);
-        renderer.SetPropertyBlock(propBlock);
+
+        if (Application.isPlaying)
+        {
+            // Clear MaterialPropertyBlock so URP SRP Batcher stays 100% active across all randomized meshes
+            renderer.SetPropertyBlock(null);
+
+            if (baseSharedMaterial == null)
+            {
+                baseSharedMaterial = renderer.sharedMaterial;
+            }
+
+            var key = (baseSharedMaterial, appliedST);
+            if (!s_SrpBatcherMaterialCache.TryGetValue(key, out Material variantMat) || variantMat == null)
+            {
+                variantMat = new Material(baseSharedMaterial)
+                {
+                    name = $"{baseSharedMaterial.name}_ST_{appliedST.z:F2}_{appliedST.w:F2}",
+                    enableInstancing = true
+                };
+                if (variantMat.HasProperty(stPropertyName))
+                {
+                    variantMat.SetVector(stPropertyName, appliedST);
+                }
+                variantMat.mainTextureScale = new Vector2(appliedST.x, appliedST.y);
+                variantMat.mainTextureOffset = new Vector2(appliedST.z, appliedST.w);
+                s_SrpBatcherMaterialCache[key] = variantMat;
+            }
+
+            renderer.sharedMaterial = variantMat;
+        }
+        else
+        {
+            MaterialPropertyBlock propBlock = new MaterialPropertyBlock();
+            renderer.GetPropertyBlock(propBlock);
+            propBlock.SetVector(stPropertyName, appliedST);
+            renderer.SetPropertyBlock(propBlock);
+        }
     }
 }
 

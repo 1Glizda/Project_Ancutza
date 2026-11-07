@@ -59,11 +59,51 @@ namespace AZE.AdvancedFirstPerson
         private float _crouchHeight;
         public float TargetHeight { get; set; }
 
+        public bool IsMovementLocked { get; private set; }
+        private bool _hasLockedPosition;
+        private Vector3 _lockedPosition;
+
+        /// <summary>
+        /// Locks or unlocks player body translation via the StudiosAZE movement system.
+        /// When locked, fixes the player's position in place.
+        /// </summary>
+        public void SetMovementLocked(bool locked, Vector3? fixedWorldPosition = null)
+        {
+            IsMovementLocked = locked;
+            CurrentMoveVelocity = Vector3.zero;
+            VerticalVelocity = 0f;
+            JumpBufferCounter = 0f;
+
+            if (locked)
+            {
+                if (_states != null && _currentState != null && _currentState != _states.Idle)
+                {
+                    SwitchState(_states.Idle);
+                }
+
+                _hasLockedPosition = true;
+                _lockedPosition = fixedWorldPosition ?? transform.position;
+                TeleportTo(_lockedPosition);
+            }
+            else
+            {
+                _hasLockedPosition = false;
+            }
+        }
+
+        public void TeleportTo(Vector3 worldPosition)
+        {
+            bool wasEnabled = Controller != null && Controller.enabled;
+            if (wasEnabled) Controller.enabled = false;
+            transform.position = worldPosition;
+            if (wasEnabled) Controller.enabled = true;
+        }
+
         public float CurrentSpeedPercentage
         {
             get
             {
-                if (Controller == null) return 0f;
+                if (Controller == null || IsMovementLocked) return 0f;
                 Vector3 horizontalVel = new Vector3(Controller.velocity.x, 0, Controller.velocity.z);
                 return Mathf.Clamp01(horizontalVel.magnitude / RunSpeed);
             }
@@ -85,6 +125,18 @@ namespace AZE.AdvancedFirstPerson
 
         private void Update()
         {
+            if (IsMovementLocked)
+            {
+                CurrentMoveVelocity = Vector3.zero;
+                VerticalVelocity = 0f;
+                JumpBufferCounter = 0f;
+                if (_hasLockedPosition && (transform.position - _lockedPosition).sqrMagnitude > 0.0001f)
+                {
+                    TeleportTo(_lockedPosition);
+                }
+                return;
+            }
+
             IsGrounded = Controller.isGrounded;
 
             if (InputHandler.JumpTriggered)
@@ -129,6 +181,12 @@ namespace AZE.AdvancedFirstPerson
 
         public void HandleMovement(float speed)
         {
+            if (IsMovementLocked)
+            {
+                CurrentMoveVelocity = Vector3.zero;
+                return;
+            }
+
             Vector2 input = InputHandler.MoveInput;
             Vector3 moveDir = (transform.right * input.x + transform.forward * input.y).normalized;
 
@@ -173,6 +231,12 @@ namespace AZE.AdvancedFirstPerson
 
         public bool CanDodge()
         {
+            if (IsMovementLocked)
+            {
+                InputHandler.UseDodge();
+                return false;
+            }
+
             if (Time.time >= LastDodgeTime + DodgeCooldown && IsGrounded && !InputHandler.CrouchTriggered)
             {
                 return true;

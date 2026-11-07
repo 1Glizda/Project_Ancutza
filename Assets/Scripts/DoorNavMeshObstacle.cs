@@ -46,7 +46,7 @@ public class DoorNavMeshObstacle : MonoBehaviour
 
         obstacle.shape = NavMeshObstacleShape.Box;
         obstacle.carving = true;
-        obstacle.carveOnlyStationary = false;
+        obstacle.carveOnlyStationary = true;
 
         // If obstacle already has properly configured size, keep it
         if (obstacle.size != Vector3.one && obstacle.size.y > 1.5f)

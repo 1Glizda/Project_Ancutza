@@ -4,6 +4,7 @@ using UnityEngine;
 public class DoorHighlighter : MonoBehaviour
 {
     [SerializeField] private Material outlineMaterial;
+    private static Material sharedFallbackOutlineMaterial;
     private readonly List<GameObject> outlineObjects = new List<GameObject>();
     private bool isHighlighted = false;
 
@@ -14,19 +15,36 @@ public class DoorHighlighter : MonoBehaviour
 
     private void EnsureMaterial()
     {
+        if (outlineMaterial != null)
+        {
+            if (sharedFallbackOutlineMaterial == null)
+            {
+                sharedFallbackOutlineMaterial = outlineMaterial;
+            }
+            return;
+        }
+
+        if (sharedFallbackOutlineMaterial != null)
+        {
+            outlineMaterial = sharedFallbackOutlineMaterial;
+            return;
+        }
+
+#if UNITY_EDITOR
+        outlineMaterial = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/Shaders/DoorBlurOutlineMat.mat");
+#endif
         if (outlineMaterial == null)
         {
-#if UNITY_EDITOR
-            outlineMaterial = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/Shaders/DoorBlurOutlineMat.mat");
-#endif
-            if (outlineMaterial == null)
+            Shader shader = Shader.Find("Custom/DoorBlurOutline");
+            if (shader != null)
             {
-                Shader shader = Shader.Find("Custom/DoorBlurOutline");
-                if (shader != null)
-                {
-                    outlineMaterial = new Material(shader);
-                }
+                outlineMaterial = new Material(shader);
             }
+        }
+
+        if (outlineMaterial != null)
+        {
+            sharedFallbackOutlineMaterial = outlineMaterial;
         }
     }
 

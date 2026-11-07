@@ -27,6 +27,13 @@ public class movement : MonoBehaviour
     public float maxInspectionPitch = 65f;
     private float currentInspectionYawOffset = 0f;
 
+    [Header("Strict Desk Focus (Character vs Book)")]
+    public bool isDeskMode = false;
+    public float deskTargetPitch = -2f;
+    public float deskTargetYaw = 180f;
+    public float deskMaxPitchDelta = 4f;
+    public float deskMaxYawDelta = 8f;
+
     [Header("Sprint")]
     public float sprintMulti = 1.6f;
     public float maxStamina = 5f;
@@ -91,6 +98,20 @@ public class movement : MonoBehaviour
 
         xRotation -= mouseY;
 
+        if (isDeskMode)
+        {
+            // Strict dual camera focus: smoothly orient and contain camera towards target angle
+            xRotation = Mathf.Lerp(xRotation, deskTargetPitch, Time.deltaTime * 12f);
+            xRotation = Mathf.Clamp(xRotation, deskTargetPitch - deskMaxPitchDelta, deskTargetPitch + deskMaxPitchDelta);
+
+            currentInspectionYawOffset += mouseX;
+            currentInspectionYawOffset = Mathf.Clamp(currentInspectionYawOffset, -deskMaxYawDelta, deskMaxYawDelta);
+
+            cameraTransform.localRotation = Quaternion.Euler(xRotation, 0, 0);
+            transform.rotation = Quaternion.Euler(0f, deskTargetYaw + currentInspectionYawOffset, 0f);
+            return;
+        }
+
         if (isInspectionMode)
         {
             // Contained inspection view over the book
@@ -113,8 +134,8 @@ public class movement : MonoBehaviour
 
     void HandleMove()
     {
-        // Disable movement while reading the check-in book
-        if (!canMove || MovementLocked)
+        // Disable movement while reading the check-in book or at the desk
+        if (!canMove || MovementLocked || isDeskMode)
         {
             if (controller.isGrounded)
             {

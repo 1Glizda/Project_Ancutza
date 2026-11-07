@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
+using Han.CheckIn;
 
 public enum NPCState
 {
@@ -11,7 +12,11 @@ public enum NPCState
     Sitting,
     LyingDown,
     TalkingToPlayer,
-    TalkingToNPC
+    TalkingToNPC,
+    /// <summary>Driven by an external director (check-in walk, walking out). No autonomous behaviour.</summary>
+    Scripted,
+    /// <summary>Murdered. Lies on the ground and can be inspected by the player.</summary>
+    Dead
 }
 
 [RequireComponent(typeof(NavMeshAgent))]
@@ -42,7 +47,10 @@ public class NPCController : MonoBehaviour
     
     private SmartObject currentSmartObject;
     private Transform playerTransform;
+    private NavMeshPath cachedPath;
+    private float nextObstacleCheckTime = 0f;
 
+    public static readonly List<NPCController> ActiveNPCs = new List<NPCController>();
     private static HashSet<NPCController> chattingNPCs = new HashSet<NPCController>();
 
     private void Awake()
@@ -51,6 +59,14 @@ public class NPCController : MonoBehaviour
         billboard = GetComponentInChildren<BillboardSprite>();
         speechBubble = GetComponentInChildren<SpeechBubble>();
         spawnPosition = transform.position;
+        cachedPath = new NavMeshPath();
+
+        // A kinematic Rigidbody prevents NavMeshAgent from updating transform.position
+        var rb = GetComponent<Rigidbody>();
+        if (rb != null)
+        {
+            Destroy(rb);
+        }
         
         GameObject player = GameObject.FindGameObjectWithTag("Player");
         if (player != null)
@@ -59,27 +75,177 @@ public class NPCController : MonoBehaviour
         }
     }
 
+    private void OnEnable()
+    {
+        if (!ActiveNPCs.Contains(this))
+        {
+            ActiveNPCs.Add(this);
+        }
+    }
+
+    private void OnDisable()
+    {
+        ActiveNPCs.Remove(this);
+        chattingNPCs.Remove(this);
+    }
+
+    // ------------------------------------------------------------------
+    //  Night-loop API (used by HanGameDirector)
+    // ------------------------------------------------------------------
+    public static event System.Action<NPCController> OnBodyInspected;
+
+    public GuestData Guest { get; private set; }
+    public SpeechBubble Bubble => speechBubble;
+    public NavMeshAgent Agent => agent;
+    public bool IsDead => CurrentState == NPCState.Dead;
+    public bool IsFreeToAct => CurrentState == NPCState.Wandering || CurrentState == NPCState.Idle;
+    public bool CanBeKilled => CurrentState == NPCState.Wandering || CurrentState == NPCState.Idle ||
+                               CurrentState == NPCState.Sitting || CurrentState == NPCState.LyingDown;
+
+    /// <summary>Binds a generated guest to this NPC and dresses the billboard with its body sprite. Call before the NPC is activated.</summary>
+    public void AssignGuest(GuestData guest, bool startScripted)
+    {
+        Guest = guest;
+        if (guest != null) guest.npc = this;
+        if (startScripted) CurrentState = NPCState.Scripted;
+
+        if (guest != null && guest.bodySprite != null)
+        {
+            var sr = GetComponentInChildren<SpriteRenderer>(true);
+            if (sr != null)
+            {
+                const float figureHeight = 1.75f;
+                sr.sprite = guest.bodySprite;
+                float parentScale = sr.transform.parent != null ? Mathf.Max(0.01f, sr.transform.parent.lossyScale.y) : 1f;
+                sr.transform.localScale = Vector3.one * (figureHeight / 2f / parentScale);
+                sr.transform.localPosition = new Vector3(0f, (figureHeight * 0.5f + 0.02f) / parentScale, 0f);
+                sr.color = Color.white;
+            }
+        }
+    }
+
+    private Vector3 pendingDestination;
+    private bool hasPendingDestination;
+
+    public void SetHome(Vector3 position)
+    {
+        spawnPosition = position;
+    }
+
+    /// <summary>Walks to a world position. If hold is true the NPC stays under external control until ReleaseScripted().</summary>
+    public void DirectTo(Vector3 position, bool hold)
+    {
+        if (IsDead) return;
+        if (NavMesh.SamplePosition(position, out NavMeshHit hit, 5f, NavMesh.AllAreas))
+            position = hit.position;
+
+        pendingDestination = position;
+        hasPendingDestination = true;
+
+        if (agent != null && agent.enabled)
+        {
+            if (!agent.isOnNavMesh)
+            {
+                if (NavMesh.SamplePosition(transform.position, out NavMeshHit selfHit, 5f, NavMesh.AllAreas))
+                    agent.Warp(selfHit.position);
+            }
+
+            if (agent.isOnNavMesh)
+            {
+                agent.isStopped = false;
+                agent.SetDestination(position);
+            }
+        }
+        CurrentState = hold ? NPCState.Scripted : NPCState.Wandering;
+        stuckTimer = 0f;
+    }
+
+    public void ReleaseScripted()
+    {
+        hasPendingDestination = false;
+        if (agent != null && agent.enabled && agent.isOnNavMesh) agent.isStopped = false;
+        if (CurrentState == NPCState.Scripted) EnterWandering();
+    }
+
+    public void Say(string line, float duration = 3.5f)
+    {
+        if (speechBubble != null && !string.IsNullOrEmpty(line))
+            speechBubble.ShowMessage(Format(line), duration);
+    }
+
+    public void Die()
+    {
+        if (IsDead) return;
+        if (currentSmartObject != null)
+        {
+            currentSmartObject.Release(gameObject);
+            currentSmartObject = null;
+        }
+        chattingNPCs.Remove(this);
+        CurrentState = NPCState.Dead;
+        hasPendingDestination = false;
+        if (speechBubble != null) speechBubble.Hide();
+        if (agent != null)
+        {
+            if (agent.enabled && agent.isOnNavMesh) agent.ResetPath();
+            agent.enabled = false;
+        }
+        if (billboard != null) billboard.SetLyingMode(true);
+
+        // Replace standing capsule collider with flat horizontal body collider on the floor
+        var cc = GetComponent<CapsuleCollider>();
+        if (cc != null) cc.enabled = false;
+        var bc = GetComponent<BoxCollider>();
+        if (bc == null) bc = gameObject.AddComponent<BoxCollider>();
+        bc.enabled = true;
+        bc.center = new Vector3(0f, 0.2f, 0f);
+        bc.size = new Vector3(1.2f, 0.4f, 1.8f);
+    }
+
+    private string Format(string line)
+    {
+        if (string.IsNullOrEmpty(line) || line.IndexOf('{') < 0) return line;
+        string victim = string.IsNullOrEmpty(HanGameDirector.VictimName) ? "the poor soul" : HanGameDirector.VictimName;
+        string suspect = HanGameDirector.PickSuspectName(Guest != null ? Guest.guestName : null);
+        return line.Replace("{victim}", victim).Replace("{suspect}", suspect);
+    }
+
     private IEnumerator Start()
     {
         // Wait one frame to ensure NavMesh is fully loaded and agent is initialized
         yield return null;
 
         // Snap to NavMesh to ensure agent initializes correctly
-        if (NavMesh.SamplePosition(transform.position, out NavMeshHit hit, 4.0f, NavMesh.AllAreas))
+        if (agent != null && agent.enabled && NavMesh.SamplePosition(transform.position, out NavMeshHit hit, 5.0f, NavMesh.AllAreas))
         {
             agent.Warp(hit.position);
         }
 
-        EnterWandering();
+        if (hasPendingDestination && agent.enabled && agent.isOnNavMesh)
+        {
+            agent.isStopped = false;
+            agent.SetDestination(pendingDestination);
+        }
+        else if (CurrentState != NPCState.Scripted && CurrentState != NPCState.Dead)
+        {
+            EnterWandering();
+        }
     }
 
     private void Update()
     {
+        if (CurrentState == NPCState.Dead) return;
+
         if (agent != null && agent.enabled && !agent.isOnNavMesh)
         {
             if (NavMesh.SamplePosition(transform.position, out NavMeshHit hit, 5.0f, NavMesh.AllAreas))
             {
                 agent.Warp(hit.position);
+                if (hasPendingDestination && agent.isOnNavMesh)
+                {
+                    agent.isStopped = false;
+                    agent.SetDestination(pendingDestination);
+                }
             }
             else
             {
@@ -87,6 +253,8 @@ public class NPCController : MonoBehaviour
                 return;
             }
         }
+
+        if (CurrentState == NPCState.Scripted) return;
 
         switch (CurrentState)
         {
@@ -157,6 +325,7 @@ public class NPCController : MonoBehaviour
         Vector3 randomPoint;
         if (RandomNavMeshPoint(spawnPosition, wanderRadius, out randomPoint))
         {
+            if (agent.isOnNavMesh) agent.isStopped = false;
             agent.SetDestination(randomPoint);
         }
         else
@@ -199,6 +368,8 @@ public class NPCController : MonoBehaviour
     private void CheckForwardObstacle()
     {
         if (!agent.enabled || !agent.hasPath) return;
+        if (Time.time < nextObstacleCheckTime) return;
+        nextObstacleCheckTime = Time.time + 0.1f;
 
         Vector3 moveDir = agent.velocity;
         if (moveDir.sqrMagnitude < 0.05f) return;
@@ -208,12 +379,14 @@ public class NPCController : MonoBehaviour
         Vector3 sphereOrigin = transform.position + Vector3.up * 0.8f;
         float checkDist = agent.radius + 0.35f;
 
-        if (Physics.SphereCast(sphereOrigin, 0.25f, moveDir, out RaycastHit hit, checkDist))
+        if (Physics.SphereCast(sphereOrigin, 0.25f, moveDir, out RaycastHit hit, checkDist, ~0, QueryTriggerInteraction.Ignore))
         {
-            if (hit.collider != null && !hit.collider.isTrigger)
+            if (hit.collider != null)
             {
-                string cName = hit.collider.name.ToLower();
-                if (!cName.Contains("platform") && !cName.Contains("floor") && cName != "terrain" &&
+                string cName = hit.collider.name;
+                if (cName.IndexOf("platform", System.StringComparison.OrdinalIgnoreCase) < 0 &&
+                    cName.IndexOf("floor", System.StringComparison.OrdinalIgnoreCase) < 0 &&
+                    !cName.Equals("terrain", System.StringComparison.OrdinalIgnoreCase) &&
                     !hit.collider.transform.IsChildOf(transform) && !hit.collider.CompareTag("Player"))
                 {
                     // Solid gameobject in immediate path: stop immediately to never go past or clip into it
@@ -262,6 +435,9 @@ public class NPCController : MonoBehaviour
             return;
         }
 
+        // Open closed door along path to room/bed
+        CheckDoorAlongPath();
+
         bool arrived = !agent.pathPending && (agent.remainingDistance <= agent.stoppingDistance || 
             (agent.hasPath && agent.remainingDistance <= 1.2f && agent.velocity.sqrMagnitude < 0.01f));
 
@@ -269,6 +445,35 @@ public class NPCController : MonoBehaviour
         {
             StartUsingSmartObject();
         }
+    }
+
+    private void CheckDoorAlongPath()
+    {
+        if (Time.time < nextObstacleCheckTime) return;
+        var door = FindClosestRoomDoor(2.5f);
+        if (door != null && !door.IsOpen && !door.IsMoving)
+        {
+            door.OpenDoor();
+        }
+    }
+
+    private EasyDoorSystem.EasyDoor FindClosestRoomDoor(float maxDist = 8f)
+    {
+        var doors = FindObjectsByType<EasyDoorSystem.EasyDoor>(FindObjectsSortMode.None);
+        EasyDoorSystem.EasyDoor best = null;
+        float bestSq = maxDist * maxDist;
+        for (int i = 0; i < doors.Length; i++)
+        {
+            var d = doors[i];
+            if (d == null || d.name.IndexOf("chest", System.StringComparison.OrdinalIgnoreCase) >= 0) continue;
+            float sq = (d.transform.position - transform.position).sqrMagnitude;
+            if (sq < bestSq)
+            {
+                bestSq = sq;
+                best = d;
+            }
+        }
+        return best;
     }
 
     private void StartUsingSmartObject()
@@ -289,6 +494,13 @@ public class NPCController : MonoBehaviour
         {
             CurrentState = NPCState.LyingDown;
             billboard.SetLyingMode(true);
+
+            // Close the room door behind them when going to sleep
+            var door = FindClosestRoomDoor(7.5f);
+            if (door != null && door.IsOpen && !door.IsMoving)
+            {
+                door.CloseDoor();
+            }
         }
         else
         {
@@ -305,7 +517,8 @@ public class NPCController : MonoBehaviour
         if (speechTimer <= 0f && dialogueData != null)
         {
             speechTimer = Random.Range(10f, 20f);
-            string msg = CurrentState == NPCState.Sitting ? dialogueData.GetRandom(dialogueData.sittingThoughts) : dialogueData.GetRandom(dialogueData.sleepyMurmurs);
+            bool murder = HanGameDirector.MurderDiscovered;
+            string msg = Format(CurrentState == NPCState.Sitting ? dialogueData.GetSittingThought(murder) : dialogueData.GetSleepyMurmur(murder));
             if (!string.IsNullOrEmpty(msg))
             {
                 speechBubble.ShowMessage(msg, speechBubbleDuration);
@@ -322,6 +535,16 @@ public class NPCController : MonoBehaviour
     {
         if (currentSmartObject != null)
         {
+            // Open the door before leaving the bedroom
+            if (currentSmartObject.ObjectType == SmartObjectType.Bed)
+            {
+                var door = FindClosestRoomDoor(7.5f);
+                if (door != null && !door.IsOpen && !door.IsMoving)
+                {
+                    door.OpenDoor();
+                }
+            }
+
             currentSmartObject.Release(gameObject);
             currentSmartObject = null;
         }
@@ -340,6 +563,12 @@ public class NPCController : MonoBehaviour
 
     public void StartPlayerConversation()
     {
+        if (CurrentState == NPCState.Dead)
+        {
+            OnBodyInspected?.Invoke(this);
+            return;
+        }
+        if (CurrentState == NPCState.Scripted) return;
         if (CurrentState == NPCState.TalkingToPlayer || CurrentState == NPCState.TalkingToNPC || !agent.enabled) return;
 
         CurrentState = NPCState.TalkingToPlayer;
@@ -354,7 +583,7 @@ public class NPCController : MonoBehaviour
 
         if (dialogueData != null)
         {
-            string msg = dialogueData.GetRandom(dialogueData.greetings);
+            string msg = Format(dialogueData.GetGreeting(HanGameDirector.MurderDiscovered));
             speechBubble.ShowMessage(msg, speechBubbleDuration);
         }
         
@@ -376,11 +605,11 @@ public class NPCController : MonoBehaviour
         if (CurrentState != NPCState.Wandering && CurrentState != NPCState.Idle) return;
         if (chattingNPCs.Contains(this)) return;
 
-        NPCController[] allNPCs = FindObjectsByType<NPCController>(FindObjectsSortMode.None);
         float chatRangeSqr = npcChatRange * npcChatRange;
-        foreach (var otherNPC in allNPCs)
+        for (int i = 0; i < ActiveNPCs.Count; i++)
         {
-            if (otherNPC == this) continue;
+            var otherNPC = ActiveNPCs[i];
+            if (otherNPC == null || otherNPC == this) continue;
             if ((otherNPC.transform.position - transform.position).sqrMagnitude > chatRangeSqr) continue;
             if (Time.time - otherNPC.lastChatTime < otherNPC.npcChatCooldown) continue;
             if (otherNPC.CurrentState != NPCState.Wandering && otherNPC.CurrentState != NPCState.Idle) continue;
@@ -408,33 +637,36 @@ public class NPCController : MonoBehaviour
         DialogueData.ConversationExchange convo = null;
         if (dialogueData != null)
         {
-            convo = dialogueData.GetRandomConversation();
+            convo = dialogueData.GetConversation(HanGameDirector.MurderDiscovered);
         }
 
-        string lineA = convo != null ? convo.lineA : "Hello!";
-        string lineB = convo != null ? convo.lineB : "Hi there!";
+        string lineA = convo != null ? Format(convo.lineA) : "Hello!";
+        string lineB = convo != null ? otherNPC.Format(convo.lineB) : "Hi there!";
 
         speechBubble.ShowTypewriter(lineA, 30f);
         yield return new WaitForSeconds(speechBubbleDuration + (lineA.Length / 30f));
         speechBubble.Hide();
 
-        otherNPC.speechBubble.ShowTypewriter(lineB, 30f);
-        yield return new WaitForSeconds(speechBubbleDuration + (lineB.Length / 30f));
-        otherNPC.speechBubble.Hide();
+        if (otherNPC != null)
+        {
+            otherNPC.speechBubble.ShowTypewriter(lineB, 30f);
+            yield return new WaitForSeconds(speechBubbleDuration + (lineB.Length / 30f));
+            if (otherNPC != null) otherNPC.speechBubble.Hide();
+        }
 
         lastChatTime = Time.time;
-        otherNPC.lastChatTime = Time.time;
+        if (otherNPC != null) otherNPC.lastChatTime = Time.time;
 
         chattingNPCs.Remove(this);
         chattingNPCs.Remove(otherNPC);
 
-        EnterWandering();
-        otherNPC.EnterWandering();
+        if (CurrentState == NPCState.TalkingToNPC) EnterWandering();
+        if (otherNPC != null && otherNPC.CurrentState == NPCState.TalkingToNPC) otherNPC.EnterWandering();
     }
 
     private bool RandomNavMeshPoint(Vector3 center, float range, out Vector3 result)
     {
-        NavMeshPath path = new NavMeshPath();
+        if (cachedPath == null) cachedPath = new NavMeshPath();
         for (int i = 0; i < 30; i++)
         {
             Vector2 randomCircle = Random.insideUnitCircle * range;
@@ -446,9 +678,9 @@ public class NPCController : MonoBehaviour
                 if (!Physics.CheckSphere(hit.position + Vector3.up * 0.8f, 0.35f, ~0, QueryTriggerInteraction.Ignore))
                 {
                     // Verify the point is actually reachable
-                    if (NavMesh.CalculatePath(transform.position, hit.position, NavMesh.AllAreas, path))
+                    if (NavMesh.CalculatePath(transform.position, hit.position, NavMesh.AllAreas, cachedPath))
                     {
-                        if (path.status == NavMeshPathStatus.PathComplete)
+                        if (cachedPath.status == NavMeshPathStatus.PathComplete)
                         {
                             result = hit.position;
                             return true;

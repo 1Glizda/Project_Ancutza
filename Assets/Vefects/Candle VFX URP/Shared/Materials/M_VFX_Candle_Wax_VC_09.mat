@@ -14,7 +14,7 @@ Material:
   m_ValidKeywords: []
   m_InvalidKeywords: []
   m_LightmapFlags: 4
-  m_EnableInstancingVariants: 0
+  m_EnableInstancingVariants: 1
   m_DoubleSidedGI: 0
   m_CustomRenderQueue: -1
   stringTagMap: {}
@@ -59,3 +59,4 @@ Material:
     - _WaxColor: {r: 0.8773585, g: 0.48864958, b: 0.28555536, a: 0}
     - _WaxSSSColor: {r: 0.4811321, g: 0.4363077, b: 0.39716092, a: 0}
   m_BuildTextureStacks: []
+  m_AllowLocking: 1
