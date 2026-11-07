@@ -1,4 +1,4 @@
-name: WebGL Build and Deploy
+name: WebGL Build and Deploy to Itch.io
 
 on:
   push:
@@ -47,28 +47,24 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: build-WebGL
-          # Change: Adding '/*' ensures we upload the CONTENTS, not the folder itself
           path: build/WebGL/*
 
-  deployPages:
+  deployItch:
     needs: buildWebGL
-    name: Deploy to GitHub Pages
+    name: Deploy to Itch.io
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
       - name: Download WebGL Build Artifact
         uses: actions/download-artifact@v4
         with:
           name: build-WebGL
-          path: build_files # Keep this a temp folder
+          path: build_files
 
-      - name: Deploy to GitHub Pages
-        uses: JamesIves/github-pages-deploy-action@v4
+      - name: Push to Itch.io via Butler
+        uses: JosephMcA/butler-publish-action@v1.0.3
         with:
-          branch: gh-pages
-          # This will take the contents of build_files and put them at the root of gh-pages
+          butler_api_key: ${{ secrets.BUTLER_API_KEY }}
+          game: ${{ secrets.ITCH_GAME }}
+          user: ${{ secrets.ITCH_USERNAME }}
+          channel: webgl
           folder: build_files
