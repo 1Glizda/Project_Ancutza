@@ -60,11 +60,19 @@ jobs:
           name: build-WebGL
           path: build_files
 
-      - name: Push to Itch.io via Butler
-        uses: JosephMcA/butler-publish-action@v1.0.3
-        with:
-          butler_api_key: ${{ secrets.BUTLER_API_KEY }}
-          game: ${{ secrets.ITCH_GAME }}
-          user: ${{ secrets.ITCH_USERNAME }}
-          channel: webgl
-          folder: build_files
+      - name: Install and Run Butler
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+          ITCH_USER: ${{ secrets.ITCH_USERNAME }}
+          ITCH_GAME: ${{ secrets.ITCH_GAME }}
+        run: |
+          # Download Butler
+          curl -L -o butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
+          unzip butler.zip
+          chmod +x butler
+          
+          # Check Butler version
+          ./butler -V
+          
+          # Push build_files to Itch
+          ./butler push build_files "$ITCH_USER/$ITCH_GAME:webgl"
