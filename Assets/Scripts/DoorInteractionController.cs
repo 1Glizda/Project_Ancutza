@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using EasyDoorSystem;
 
@@ -23,10 +24,25 @@ public class DoorInteractionController : MonoBehaviour
     [Tooltip("Allow E key interaction in addition to Left Click.")]
     [SerializeField] private bool allowKeyE = true;
 
+    private struct CachedDoorInfo
+    {
+        public EasyDoor door;
+        public Transform root;
+        public Vector3 center;
+        public bool lastOpenState;
+        public bool wasMoving;
+    }
+
     private EasyDoor currentDoor;
     private NPCController currentNPC;
     private DoorHighlighter currentHighlighter;
     private static DoorInteractionController instance;
+
+    private readonly RaycastHit[] raycastBuffer = new RaycastHit[16];
+    private readonly RaycastHit[] sphereCastBuffer = new RaycastHit[16];
+    private readonly RaycastHit[] losBuffer = new RaycastHit[16];
+    private readonly List<CachedDoorInfo> cachedDoors = new List<CachedDoorInfo>(32);
+    private readonly Dictionary<Collider, EasyDoor> colliderToDoorCache = new Dictionary<Collider, EasyDoor>(64);
 
     private void Awake()
     {
@@ -43,6 +59,44 @@ public class DoorInteractionController : MonoBehaviour
             {
                 targetCamera = GetComponentInChildren<Camera>();
             }
+        }
+        RefreshDoorCache();
+    }
+
+    public void RefreshDoorCache()
+    {
+        cachedDoors.Clear();
+        colliderToDoorCache.Clear();
+        EasyDoor[] found = FindObjectsByType<EasyDoor>(FindObjectsSortMode.None);
+        for (int i = 0; i < found.Length; i++)
+        {
+            EasyDoor door = found[i];
+            if (door == null) continue;
+            Transform root = GetInteractableRoot(door);
+            cachedDoors.Add(new CachedDoorInfo
+            {
+                door = door,
+                root = root,
+                center = ComputeInteractableCenter(root),
+                lastOpenState = door.IsOpen,
+                wasMoving = door.IsMoving
+            });
+        }
+    }
+
+    private static void SortHitsByDistance(RaycastHit[] buffer, int count)
+    {
+        for (int i = 1; i < count; i++)
+        {
+            RaycastHit key = buffer[i];
+            float keyDist = key.distance;
+            int j = i - 1;
+            while (j >= 0 && buffer[j].distance > keyDist)
+            {
+                buffer[j + 1] = buffer[j];
+                j--;
+            }
+            buffer[j + 1] = key;
         }
     }
 
@@ -158,34 +212,37 @@ public class DoorInteractionController : MonoBehaviour
         Ray ray = new Ray(targetCamera.transform.position, targetCamera.transform.forward);
         RaycastHit hit;
 
-        if (Physics.Raycast(ray, out hit, interactDistance))
+        if (Physics.Raycast(ray, out hit, interactDistance, ~0, QueryTriggerInteraction.Ignore))
         {
             NPCController npc = hit.collider.GetComponentInParent<NPCController>();
             if (npc != null) return npc;
         }
 
-        if (Physics.SphereCast(ray, 0.35f, out hit, interactDistance))
+        if (Physics.SphereCast(ray, 0.35f, out hit, interactDistance, ~0, QueryTriggerInteraction.Ignore))
         {
             NPCController npc = hit.collider.GetComponentInParent<NPCController>();
             if (npc != null) return npc;
         }
 
-        // Proximity check for NPC
-        NPCController[] allNPCs = FindObjectsByType<NPCController>(FindObjectsSortMode.None);
+        // Proximity check for NPC using cached ActiveNPCs list
+        var allNPCs = NPCController.ActiveNPCs;
         NPCController closestNPC = null;
         float minDistance = interactDistance;
 
         Vector3 camPos = targetCamera.transform.position;
         Vector3 camForward = targetCamera.transform.forward;
 
-        foreach (NPCController npc in allNPCs)
+        for (int i = 0; i < allNPCs.Count; i++)
         {
+            NPCController npc = allNPCs[i];
             if (npc == null) continue;
 
-            float dist = Vector3.Distance(camPos, npc.transform.position);
-            if (dist <= interactDistance && dist < minDistance)
+            Vector3 offset = npc.transform.position - camPos;
+            float sqrDist = offset.sqrMagnitude;
+            if (sqrDist <= minDistance * minDistance)
             {
-                Vector3 toNPC = (npc.transform.position - camPos).normalized;
+                float dist = Mathf.Sqrt(sqrDist);
+                Vector3 toNPC = offset / Mathf.Max(dist, 0.0001f);
                 float angle = Vector3.Angle(camForward, toNPC);
                 if (angle <= 50f)
                 {
@@ -211,15 +268,15 @@ public class DoorInteractionController : MonoBehaviour
         Vector3 camForward = targetCamera.transform.forward;
         Ray ray = new Ray(camPos, camForward);
 
-        // 1. Direct raycast up to interactDistance using RaycastAll to bypass player colliders
-        RaycastHit[] hits = Physics.RaycastAll(ray, interactDistance);
-        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+        // 1. Direct raycast up to interactDistance using RaycastNonAlloc to bypass player colliders
+        int hitCount = Physics.RaycastNonAlloc(ray, raycastBuffer, interactDistance, ~0, QueryTriggerInteraction.Ignore);
+        SortHitsByDistance(raycastBuffer, hitCount);
 
-        foreach (RaycastHit hit in hits)
+        for (int i = 0; i < hitCount; i++)
         {
+            RaycastHit hit = raycastBuffer[i];
             if (hit.collider == null) continue;
             if (hit.collider.transform.IsChildOf(transform) || hit.collider.transform == transform) continue;
-            if (hit.collider.isTrigger) continue;
 
             EasyDoor directDoor = ResolveEasyDoor(hit.collider);
             if (directDoor != null)
@@ -232,14 +289,14 @@ public class DoorInteractionController : MonoBehaviour
         }
 
         // 2. Thick SphereCast up to interactDistance for forgiving aiming
-        RaycastHit[] sphereHits = Physics.SphereCastAll(ray, 0.25f, interactDistance);
-        System.Array.Sort(sphereHits, (a, b) => a.distance.CompareTo(b.distance));
+        int sHitCount = Physics.SphereCastNonAlloc(ray, 0.25f, sphereCastBuffer, interactDistance, ~0, QueryTriggerInteraction.Ignore);
+        SortHitsByDistance(sphereCastBuffer, sHitCount);
 
-        foreach (RaycastHit sHit in sphereHits)
+        for (int i = 0; i < sHitCount; i++)
         {
+            RaycastHit sHit = sphereCastBuffer[i];
             if (sHit.collider == null) continue;
             if (sHit.collider.transform.IsChildOf(transform) || sHit.collider.transform == transform) continue;
-            if (sHit.collider.isTrigger) continue;
 
             EasyDoor sDoor = ResolveEasyDoor(sHit.collider);
             if (sDoor != null)
@@ -248,28 +305,42 @@ public class DoorInteractionController : MonoBehaviour
             }
         }
 
-        // 3. Aim-based candidate selection: if both chest and door are in range, pick ONLY the one the camera points to!
-        EasyDoor[] allDoors = FindObjectsByType<EasyDoor>(FindObjectsSortMode.None);
+        // 3. Aim-based candidate selection using cached door list
+        if (cachedDoors.Count == 0)
+        {
+            RefreshDoorCache();
+        }
+
         EasyDoor bestCandidate = null;
         float bestScore = float.MaxValue;
         const float maxAimAngle = 45f; // Must be within reasonable view cone in front of camera
+        float maxDistSqr = interactDistance * interactDistance;
 
-        foreach (EasyDoor door in allDoors)
+        for (int i = 0; i < cachedDoors.Count; i++)
         {
+            CachedDoorInfo info = cachedDoors[i];
+            EasyDoor door = info.door;
             if (door == null) continue;
 
-            Vector3 center = GetInteractableCenter(door);
-            Vector3 toTarget = center - camPos;
-            float dist = toTarget.magnitude;
+            if (door.IsMoving || info.wasMoving || info.lastOpenState != door.IsOpen)
+            {
+                info.center = ComputeInteractableCenter(info.root);
+                info.lastOpenState = door.IsOpen;
+                info.wasMoving = door.IsMoving;
+                cachedDoors[i] = info;
+            }
 
-            if (dist > interactDistance) continue;
+            Vector3 toTarget = info.center - camPos;
+            float distSqr = toTarget.sqrMagnitude;
+            if (distSqr > maxDistSqr) continue;
 
-            Vector3 dirToTarget = toTarget.normalized;
+            float dist = Mathf.Sqrt(distSqr);
+            Vector3 dirToTarget = toTarget / Mathf.Max(dist, 0.0001f);
             float angle = Vector3.Angle(camForward, dirToTarget);
             if (angle > maxAimAngle) continue;
 
             // Check line-of-sight to ensure not targeting through walls
-            if (!HasLineOfSight(camPos, center, door, dist)) continue;
+            if (!HasLineOfSight(camPos, info.center, info.root, dist)) continue;
 
             // Score: primarily the angle (camera aim direction), with a small distance factor
             float score = angle + (dist / interactDistance) * 2.0f;
@@ -286,16 +357,16 @@ public class DoorInteractionController : MonoBehaviour
     private Transform GetInteractableRoot(EasyDoor door)
     {
         if (door == null) return null;
-        if (door.transform.parent != null && door.transform.parent.name.ToLower().Contains("chest"))
+        if (door.transform.parent != null && door.transform.parent.name.IndexOf("chest", System.StringComparison.OrdinalIgnoreCase) >= 0)
         {
             return door.transform.parent;
         }
         return door.transform;
     }
 
-    private Vector3 GetInteractableCenter(EasyDoor door)
+    private Vector3 ComputeInteractableCenter(Transform root)
     {
-        Transform root = GetInteractableRoot(door);
+        if (root == null) return Vector3.zero;
         Renderer[] renderers = root.GetComponentsInChildren<Renderer>();
         if (renderers != null && renderers.Length > 0)
         {
@@ -303,7 +374,7 @@ public class DoorInteractionController : MonoBehaviour
             bool foundFirst = false;
             foreach (Renderer r in renderers)
             {
-                if (r == null || r.name.Contains("BlurOutline")) continue;
+                if (r == null || r.name.IndexOf("BlurOutline", System.StringComparison.OrdinalIgnoreCase) >= 0) continue;
                 if (!foundFirst)
                 {
                     b = r.bounds;
@@ -334,22 +405,20 @@ public class DoorInteractionController : MonoBehaviour
         return root.position;
     }
 
-    private bool HasLineOfSight(Vector3 camPos, Vector3 targetCenter, EasyDoor door, float maxDist)
+    private bool HasLineOfSight(Vector3 camPos, Vector3 targetCenter, Transform root, float maxDist)
     {
         Vector3 dir = targetCenter - camPos;
         float dist = dir.magnitude;
         if (dist < 0.05f) return true;
 
-        RaycastHit[] hits = Physics.RaycastAll(camPos, dir.normalized, dist);
-        Transform root = GetInteractableRoot(door);
+        int hitCount = Physics.RaycastNonAlloc(camPos, dir / dist, losBuffer, dist, ~0, QueryTriggerInteraction.Ignore);
+        SortHitsByDistance(losBuffer, hitCount);
 
-        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
-
-        foreach (RaycastHit hit in hits)
+        for (int i = 0; i < hitCount; i++)
         {
+            RaycastHit hit = losBuffer[i];
             if (hit.collider == null) continue;
             if (hit.collider.transform.IsChildOf(transform) || hit.collider.transform == transform) continue;
-            if (hit.collider.isTrigger) continue;
 
             // If hit belongs to the interactable, line of sight is clear
             if (hit.collider.transform.IsChildOf(root) || hit.collider.transform == root)
@@ -370,19 +439,26 @@ public class DoorInteractionController : MonoBehaviour
     private EasyDoor ResolveEasyDoor(Collider col)
     {
         if (col == null) return null;
+        if (colliderToDoorCache.TryGetValue(col, out EasyDoor cached))
+        {
+            return cached;
+        }
+
         // 1. Direct component on collider
         EasyDoor door = col.GetComponent<EasyDoor>();
-        if (door != null) return door;
+        if (door == null)
+        {
+            // 2. Child component (e.g. col is chest, EasyDoor is on chest_top)
+            door = col.GetComponentInChildren<EasyDoor>();
+        }
+        if (door == null)
+        {
+            // 3. Parent component (e.g. col is Barn wood, EasyDoor is on _movable)
+            door = col.GetComponentInParent<EasyDoor>();
+        }
 
-        // 2. Child component (e.g. col is chest, EasyDoor is on chest_top)
-        door = col.GetComponentInChildren<EasyDoor>();
-        if (door != null) return door;
-
-        // 3. Parent component (e.g. col is Barn wood, EasyDoor is on _movable)
-        door = col.GetComponentInParent<EasyDoor>();
-        if (door != null) return door;
-
-        return null;
+        colliderToDoorCache[col] = door;
+        return door;
     }
 
     private void HandleInteraction()
@@ -393,6 +469,7 @@ public class DoorInteractionController : MonoBehaviour
             if (currentDoor != null && !currentDoor.IsMoving)
             {
                 currentDoor.ToggleDoor();
+                Han.CheckIn.HanGameDirector.Instance?.NotifyDoorToggled(currentDoor);
 
                 if (currentHighlighter != null)
                 {

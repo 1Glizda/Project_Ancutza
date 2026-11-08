@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public enum SmartObjectType
@@ -9,6 +10,8 @@ public enum SmartObjectType
 
 public class SmartObject : MonoBehaviour
 {
+    public static readonly List<SmartObject> ActiveSmartObjects = new List<SmartObject>();
+
     [SerializeField] private SmartObjectType smartObjectType;
     [SerializeField] private Transform interactionAnchor;
     [SerializeField] private float minUseDuration = 10f;
@@ -29,6 +32,19 @@ public class SmartObject : MonoBehaviour
     private void Awake()
     {
         EnsureInteractionAnchor();
+    }
+
+    private void OnEnable()
+    {
+        if (!ActiveSmartObjects.Contains(this))
+        {
+            ActiveSmartObjects.Add(this);
+        }
+    }
+
+    private void OnDisable()
+    {
+        ActiveSmartObjects.Remove(this);
     }
 
     public void EnsureInteractionAnchor()
@@ -92,14 +108,13 @@ public class SmartObject : MonoBehaviour
 
     public static SmartObject FindNearest(Vector3 position, SmartObjectType type, float maxRange)
     {
-        SmartObject[] allObjects = FindObjectsByType<SmartObject>(FindObjectsSortMode.None);
-        
         SmartObject nearest = null;
         float minDistanceSq = maxRange * maxRange;
         
-        foreach (var obj in allObjects)
+        for (int i = 0; i < ActiveSmartObjects.Count; i++)
         {
-            if (obj.smartObjectType == type && !obj.IsOccupied)
+            SmartObject obj = ActiveSmartObjects[i];
+            if (obj != null && obj.smartObjectType == type && !obj.IsOccupied)
             {
                 float sqrDistance = (obj.transform.position - position).sqrMagnitude;
                 if (sqrDistance <= minDistanceSq)

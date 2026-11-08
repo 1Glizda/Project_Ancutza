@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b87d78a089e044c5e949e6d48d106e76, type: 3}
+  m_Name: HanUITheme
+  m_EditorClassIdentifier: Assembly-CSharp::Han.CheckIn.HanUITheme
+  primaryTextParchment: {r: 0.949, g: 0.906, b: 0.82, a: 1}
+  secondaryTextPaper: {r: 0.875, g: 0.812, b: 0.686, a: 0.95}
+  deepSepiaBackground: {r: 0.118, g: 0.094, b: 0.075, a: 0.97}
+  charcoalModalSurface: {r: 0.145, g: 0.118, b: 0.098, a: 0.96}
+  mutedSlatePlate: {r: 0.153, g: 0.169, b: 0.188, a: 0.96}
+  brassAccent: {r: 0.784, g: 0.616, b: 0.329, a: 1}
+  goldHighlight: {r: 0.902, g: 0.757, b: 0.478, a: 1}
+  crimsonStamp: {r: 0.541, g: 0.169, b: 0.129, a: 0.98}
+  disabledColor: {r: 0.431, g: 0.396, b: 0.357, a: 0.5}
+  primaryFont: {fileID: 11400000, guid: 86ee186a2631443e0a3440d66d18d0ca, type: 2}
+  sdfFaceDilate: 0.03
+  sdfOutlineWidth: 0

@@ -1,0 +1,58 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9f103250e1794418696efdb9878b47f6, type: 3}
+  m_Name: NightConfigData
+  m_EditorClassIdentifier: Assembly-CSharp::Han.CheckIn.NightConfigData
+  nights:
+  - nightNumber: 1
+    title: Night One
+    subtitle: good luck
+    combinedTeaserText: Night One, good luck
+    displayDuration: 3
+    teaserStinger: {fileID: 0}
+  - nightNumber: 2
+    title: Night Two
+    subtitle: keep going
+    combinedTeaserText: Night Two, keep going
+    displayDuration: 3
+    teaserStinger: {fileID: 0}
+  - nightNumber: 3
+    title: Night Three
+    subtitle: trust no one
+    combinedTeaserText: Night Three, trust no one
+    displayDuration: 3
+    teaserStinger: {fileID: 0}
+  - nightNumber: 4
+    title: Night Four
+    subtitle: watch the doors
+    combinedTeaserText: Night Four, watch the doors
+    displayDuration: 3
+    teaserStinger: {fileID: 0}
+  - nightNumber: 5
+    title: Night Five
+    subtitle: the wolves are howling
+    combinedTeaserText: Night Five, the wolves are howling
+    displayDuration: 3
+    teaserStinger: {fileID: 0}
+  - nightNumber: 6
+    title: Night Six
+    subtitle: shadows lengthen
+    combinedTeaserText: Night Six, shadows lengthen
+    displayDuration: 3
+    teaserStinger: {fileID: 0}
+  - nightNumber: 7
+    title: Night Seven
+    subtitle: survive until dawn
+    combinedTeaserText: Night Seven, survive until dawn
+    displayDuration: 3.5
+    teaserStinger: {fileID: 0}
+  jsonOverrideAsset: {fileID: 0}

@@ -213,12 +213,12 @@ public class MinecraftNametag : MonoBehaviour
 
     private void LateUpdate()
     {
-        Camera cam = targetCamera;
-        if (cam == null)
+        if (targetCamera == null)
         {
-            cam = Camera.main;
-            if (cam == null) cam = FindFirstObjectByType<Camera>();
+            targetCamera = Camera.main;
+            if (targetCamera == null) targetCamera = FindFirstObjectByType<Camera>();
         }
+        Camera cam = targetCamera;
 
 #if UNITY_EDITOR
         if (!Application.isPlaying)
@@ -236,10 +236,29 @@ public class MinecraftNametag : MonoBehaviour
 
         if (cam == null) return;
 
+        Vector3 worldPos = targetHorse != null
+            ? targetHorse.position + Vector3.up * heightOffset + targetHorse.forward * forwardOffset
+            : transform.position;
+
+        float sqrDistance = (cam.transform.position - worldPos).sqrMagnitude;
+        float maxDistSqr = maxVisibleDistance * maxVisibleDistance;
+
+        if (sqrDistance > maxDistSqr)
+        {
+            if (canvas != null && canvas.enabled)
+            {
+                canvas.enabled = false;
+            }
+            return;
+        }
+
+        if (canvas != null && !canvas.enabled)
+        {
+            canvas.enabled = true;
+        }
+
         if (targetHorse != null)
         {
-            // Position above horse
-            Vector3 worldPos = targetHorse.position + Vector3.up * heightOffset + targetHorse.forward * forwardOffset;
             transform.position = worldPos;
         }
 
@@ -247,19 +266,16 @@ public class MinecraftNametag : MonoBehaviour
         transform.rotation = cam.transform.rotation;
 
         // Distance check and fading
-        float distance = Vector3.Distance(cam.transform.position, transform.position);
         if (canvasGroup != null)
         {
-            if (distance > maxVisibleDistance)
+            float fadeStartSqr = fadeStartDistance * fadeStartDistance;
+            if (sqrDistance > fadeStartSqr)
             {
-                canvasGroup.alpha = 0f;
-            }
-            else if (distance > fadeStartDistance)
-            {
+                float distance = Mathf.Sqrt(sqrDistance);
                 float t = (distance - fadeStartDistance) / (maxVisibleDistance - fadeStartDistance);
                 canvasGroup.alpha = Mathf.Lerp(1f, 0f, t);
             }
-            else
+            else if (canvasGroup.alpha < 1f)
             {
                 canvasGroup.alpha = 1f;
             }
