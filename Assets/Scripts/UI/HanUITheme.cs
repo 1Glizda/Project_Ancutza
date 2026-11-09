@@ -183,7 +183,7 @@ namespace Han.CheckIn
                 }
             }
 
-            tex.Apply();
+            tex.Apply(false, !Application.isEditor);
             _framedCardSprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect, new Vector4(10, 10, 10, 10));
             return _framedCardSprite;
         }
@@ -223,7 +223,7 @@ namespace Han.CheckIn
                 }
             }
 
-            tex.Apply();
+            tex.Apply(false, !Application.isEditor);
             _doubleBorderFrameSprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect, new Vector4(8, 8, 8, 8));
             return _doubleBorderFrameSprite;
         }
@@ -277,7 +277,7 @@ namespace Han.CheckIn
                 }
             }
 
-            tex.Apply();
+            tex.Apply(false, !Application.isEditor);
             _buttonPlateSprite = Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect, new Vector4(6, 6, 6, 6));
             return _buttonPlateSprite;
         }
@@ -314,7 +314,7 @@ namespace Han.CheckIn
                 }
             }
 
-            tex.Apply();
+            tex.Apply(false, !Application.isEditor);
             _vignetteGrainSprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f);
             return _vignetteGrainSprite;
         }
@@ -364,7 +364,7 @@ namespace Han.CheckIn
                 }
             }
 
-            tex.Apply();
+            tex.Apply(false, !Application.isEditor);
             _dividerOrnamentSprite = Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f), 100f);
             return _dividerOrnamentSprite;
         }

@@ -447,9 +447,13 @@ public class NPCController : MonoBehaviour
         }
     }
 
+    private static EasyDoorSystem.EasyDoor[] s_cachedRoomDoors;
+    private static int s_cachedDoorsSceneHandle = -1;
+
     private void CheckDoorAlongPath()
     {
         if (Time.time < nextObstacleCheckTime) return;
+        nextObstacleCheckTime = Time.time + 0.25f;
         var door = FindClosestRoomDoor(2.5f);
         if (door != null && !door.IsOpen && !door.IsMoving)
         {
@@ -459,12 +463,18 @@ public class NPCController : MonoBehaviour
 
     private EasyDoorSystem.EasyDoor FindClosestRoomDoor(float maxDist = 8f)
     {
-        var doors = FindObjectsByType<EasyDoorSystem.EasyDoor>(FindObjectsSortMode.None);
+        int sceneHandle = gameObject.scene.handle;
+        if (s_cachedRoomDoors == null || s_cachedDoorsSceneHandle != sceneHandle)
+        {
+            s_cachedRoomDoors = FindObjectsByType<EasyDoorSystem.EasyDoor>(FindObjectsSortMode.None);
+            s_cachedDoorsSceneHandle = sceneHandle;
+        }
+
         EasyDoorSystem.EasyDoor best = null;
         float bestSq = maxDist * maxDist;
-        for (int i = 0; i < doors.Length; i++)
+        for (int i = 0; i < s_cachedRoomDoors.Length; i++)
         {
-            var d = doors[i];
+            var d = s_cachedRoomDoors[i];
             if (d == null || d.name.IndexOf("chest", System.StringComparison.OrdinalIgnoreCase) >= 0) continue;
             float sq = (d.transform.position - transform.position).sqrMagnitude;
             if (sq < bestSq)

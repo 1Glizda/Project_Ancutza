@@ -415,7 +415,7 @@ namespace Han.CheckIn
             tex.filterMode = FilterMode.Point;
             tex.wrapMode = TextureWrapMode.Clamp;
             tex.SetPixels32(px);
-            tex.Apply(false, false);
+            tex.Apply(false, !Application.isEditor);
 
             g.spriteSheet = tex;
             g.bodySprite = Sprite.Create(tex, new Rect(0, 0, W, H), new Vector2(0.5f, 0.5f), 32f);
@@ -428,7 +428,14 @@ namespace Han.CheckIn
         public static void Release(GuestData g)
         {
             if (g == null) return;
-            if (g.portrait != null) Object.Destroy(g.portrait);
+            if (g.portrait != null)
+            {
+                if (g.portrait.texture != null && g.portrait.texture != g.spriteSheet)
+                {
+                    Object.Destroy(g.portrait.texture);
+                }
+                Object.Destroy(g.portrait);
+            }
             if (g.bodySprite != null) Object.Destroy(g.bodySprite);
             if (g.spriteSheet != null) Object.Destroy(g.spriteSheet);
             g.portrait = null;

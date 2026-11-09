@@ -54,6 +54,7 @@ namespace Han.CheckIn
         [SerializeField] private Slider masterVolumeSlider;
         [SerializeField] private Slider lookSensitivitySlider;
         [SerializeField] private Toggle doorHighlightToggle;
+        [SerializeField] private Toggle lowEndModeToggle;
 
         [SerializeField] private GameObject creditsPanel;
         [SerializeField] private CanvasGroup creditsCanvasGroup;
@@ -208,6 +209,7 @@ namespace Han.CheckIn
         {
             if (Instance == this) Instance = null;
             if (Time.timeScale == 0f) Time.timeScale = 1f;
+            HanLowEndOptimizer.OnLowEndModeChanged -= HandleExternalLowEndModeChanged;
 
             if (introVideoPlayer != null)
             {
@@ -289,7 +291,9 @@ namespace Han.CheckIn
 
             if (pauseBlurVolume != null)
             {
-                pauseBlurVolume.weight = 1f;
+                bool allowBlur = !HanLowEndOptimizer.IsLowEndModeEnabled;
+                pauseBlurVolume.enabled = allowBlur;
+                pauseBlurVolume.weight = allowBlur ? 1f : 0f;
             }
 
             if (screenFadeCanvasGroup != null)
@@ -659,7 +663,9 @@ namespace Han.CheckIn
 
             if (pauseBlurVolume != null)
             {
-                pauseBlurVolume.weight = 1f;
+                bool allowBlur = !HanLowEndOptimizer.IsLowEndModeEnabled;
+                pauseBlurVolume.enabled = allowBlur;
+                pauseBlurVolume.weight = allowBlur ? 1f : 0f;
             }
 
             float elapsed = 0f;
@@ -879,8 +885,12 @@ namespace Han.CheckIn
             float startAlpha = pauseMenuCanvasGroup != null ? pauseMenuCanvasGroup.alpha : (opening ? 0f : 1f);
             float targetAlpha = opening ? 1f : 0f;
 
-            float startBlur = pauseBlurVolume != null ? pauseBlurVolume.weight : (opening ? 0f : 1f);
-            float targetBlur = opening ? 1f : 0f;
+            float startBlur = (pauseBlurVolume != null && !HanLowEndOptimizer.IsLowEndModeEnabled) ? pauseBlurVolume.weight : 0f;
+            float targetBlur = (opening && !HanLowEndOptimizer.IsLowEndModeEnabled) ? 1f : 0f;
+            if (pauseBlurVolume != null)
+            {
+                pauseBlurVolume.enabled = !HanLowEndOptimizer.IsLowEndModeEnabled;
+            }
 
             if (pauseMenuCanvasGroup != null)
             {
@@ -1020,6 +1030,41 @@ namespace Han.CheckIn
             HanUIAudioManager.PlayClick();
         }
 
+        private void OnLowEndModeToggled(bool enabled)
+        {
+            HanLowEndOptimizer.SetLowEndMode(enabled, savePreference: true);
+            if (pauseBlurVolume != null && enabled)
+            {
+                pauseBlurVolume.weight = 0f;
+                pauseBlurVolume.enabled = false;
+            }
+            HanUIAudioManager.PlayClick();
+        }
+
+        private void HandleExternalLowEndModeChanged(bool enabled)
+        {
+            if (lowEndModeToggle != null)
+            {
+                lowEndModeToggle.SetIsOnWithoutNotify(enabled);
+            }
+            if (pauseBlurVolume != null)
+            {
+                if (enabled)
+                {
+                    pauseBlurVolume.weight = 0f;
+                    pauseBlurVolume.enabled = false;
+                }
+                else
+                {
+                    pauseBlurVolume.enabled = true;
+                    if (CurrentState == GameLoopState.MainMenu || CurrentState == GameLoopState.Paused)
+                    {
+                        pauseBlurVolume.weight = 1f;
+                    }
+                }
+            }
+        }
+
         // ------------------------------------------------------------------
         //  Internal Helpers
         // ------------------------------------------------------------------
@@ -1076,6 +1121,65 @@ namespace Han.CheckIn
                 focusNavigator = GetComponent<HanUIFocusNavigator>();
                 if (focusNavigator == null)
                     focusNavigator = gameObject.AddComponent<HanUIFocusNavigator>();
+            }
+
+            HanLowEndOptimizer.EnsureInstance();
+            EnsureLowEndModeToggleUI();
+            HanLowEndOptimizer.OnLowEndModeChanged -= HandleExternalLowEndModeChanged;
+            HanLowEndOptimizer.OnLowEndModeChanged += HandleExternalLowEndModeChanged;
+        }
+
+        private void EnsureLowEndModeToggleUI()
+        {
+            if (lowEndModeToggle == null && settingsCardRect != null)
+            {
+                Transform existing = settingsCardRect.Find("LowEndModeRow");
+                if (existing != null)
+                {
+                    lowEndModeToggle = existing.GetComponent<Toggle>();
+                }
+                else if (doorHighlightToggle != null)
+                {
+                    // Expand modal height slightly and space rows cleanly to fit the new Low-End PC Mode row
+                    if (settingsCardRect.sizeDelta.y < 555f)
+                    {
+                        settingsCardRect.sizeDelta = new Vector2(settingsCardRect.sizeDelta.x, 560f);
+                    }
+
+                    Transform volRow = settingsCardRect.Find("MasterVolumeRow");
+                    if (volRow is RectTransform volRt) volRt.anchoredPosition = new Vector2(0f, 108f);
+
+                    Transform sensRow = settingsCardRect.Find("LookSensitivityRow");
+                    if (sensRow is RectTransform sensRt) sensRt.anchoredPosition = new Vector2(0f, 48f);
+
+                    if (doorHighlightToggle.transform is RectTransform doorRt)
+                        doorRt.anchoredPosition = new Vector2(0f, -12f);
+
+                    GameObject clone = Instantiate(doorHighlightToggle.gameObject, settingsCardRect, false);
+                    clone.name = "LowEndModeRow";
+                    if (clone.transform is RectTransform cloneRt)
+                    {
+                        cloneRt.anchoredPosition = new Vector2(0f, -68f);
+                    }
+
+                    Transform lblTr = clone.transform.Find("Label");
+                    if (lblTr != null)
+                    {
+                        TMP_Text lbl = lblTr.GetComponent<TMP_Text>();
+                        if (lbl != null)
+                        {
+                            lbl.text = "LOW-END PC MODE (LOW RAM / NO GPU) [F8]";
+                        }
+                    }
+
+                    Transform backBtnTr = settingsCardRect.Find("SettingsBackButton");
+                    if (backBtnTr is RectTransform backRt && backRt.anchoredPosition.y > -195f)
+                    {
+                        backRt.anchoredPosition = new Vector2(0f, -200f);
+                    }
+
+                    lowEndModeToggle = clone.GetComponent<Toggle>();
+                }
             }
         }
 
@@ -1148,6 +1252,12 @@ namespace Han.CheckIn
                 doorHighlightToggle.SetIsOnWithoutNotify(DoorInteractionController.GlobalHighlightEnabled);
                 doorHighlightToggle.onValueChanged.RemoveListener(OnDoorHighlightToggled);
                 doorHighlightToggle.onValueChanged.AddListener(OnDoorHighlightToggled);
+            }
+            if (lowEndModeToggle != null)
+            {
+                lowEndModeToggle.SetIsOnWithoutNotify(HanLowEndOptimizer.IsLowEndModeEnabled);
+                lowEndModeToggle.onValueChanged.RemoveListener(OnLowEndModeToggled);
+                lowEndModeToggle.onValueChanged.AddListener(OnLowEndModeToggled);
             }
         }
 
