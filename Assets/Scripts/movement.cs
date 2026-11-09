@@ -32,6 +32,12 @@ public class movement : MonoBehaviour
     public float deskTargetPitch = -2f;
     public float deskTargetYaw = 180f;
     public float deskMaxPitchDelta = 4f;
+    [Tooltip("Highest the camera can look up (negative = up) while at the desk.")]
+    public float deskMinPitch = -8f;
+    [Tooltip("Lowest the camera can look down while at the desk (not straight down).")]
+    public float deskMaxPitch = 30f;
+    [System.NonSerialized] public bool deskSnapActive = false;
+    [System.NonSerialized] public float deskSnapPitch = 0f;
     public float deskMaxYawDelta = 8f;
 
     [Header("Sprint")]
@@ -100,9 +106,19 @@ public class movement : MonoBehaviour
 
         if (isDeskMode)
         {
-            // Strict dual camera focus: smoothly orient and contain camera towards target angle
-            xRotation = Mathf.Lerp(xRotation, deskTargetPitch, Time.deltaTime * 12f);
-            xRotation = Mathf.Clamp(xRotation, deskTargetPitch - deskMaxPitchDelta, deskTargetPitch + deskMaxPitchDelta);
+            // Free pitch look within a limited window (like peeking over a newspaper).
+            // The book pose is driven by this pitch in CheckInBookViewController.
+            if (deskSnapActive)
+            {
+                // Q / right-click snap: glide to the target pitch until the player moves the mouse.
+                if (Mathf.Abs(mouseY) > 0.01f) deskSnapActive = false;
+                else
+                {
+                    xRotation = Mathf.Lerp(xRotation, deskSnapPitch, Time.deltaTime * 12f);
+                    if (Mathf.Abs(xRotation - deskSnapPitch) < 0.1f) deskSnapActive = false;
+                }
+            }
+            xRotation = Mathf.Clamp(xRotation, deskMinPitch, deskMaxPitch);
 
             currentInspectionYawOffset += mouseX;
             currentInspectionYawOffset = Mathf.Clamp(currentInspectionYawOffset, -deskMaxYawDelta, deskMaxYawDelta);

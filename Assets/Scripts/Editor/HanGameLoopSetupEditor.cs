@@ -219,7 +219,7 @@ namespace Han.CheckIn.Editor
                 new Vector2(0.5f, 0.5f),
                 new Vector2(0.5f, 0.5f),
                 Vector2.zero,
-                new Vector2(600f, 520f),
+                new Vector2(600f, 560f),
                 HanUITheme.CharcoalSurface);
 
             TMP_Text settingsTitle = CreateTMPText(settingsCard.transform, "SettingsTitle", "LEDGER SETTINGS", font, 34f, FontStyles.Bold, TextAlignmentOptions.Center, HanUITheme.WarmParchment);
@@ -227,14 +227,15 @@ namespace Han.CheckIn.Editor
 
             CreateOrnamentalDivider(settingsCard.transform, "SettingsDivider", new Vector2(0.5f, 1f), new Vector2(0f, -92f), new Vector2(460f, 8f), 0.8f);
 
-            Slider masterVolSlider = CreateArchivalSliderRow(settingsCard.transform, "MasterVolumeRow", "MASTER AUDIO VOLUME", font, new Vector2(0f, 92f), 0f, 1f, 0.85f);
-            Slider lookSensSlider = CreateArchivalSliderRow(settingsCard.transform, "LookSensitivityRow", "CAMERA LOOK SENSITIVITY", font, new Vector2(0f, 22f), 4f, 45f, 20f);
-            Toggle doorHighlightToggle = CreateArchivalToggleRow(settingsCard.transform, "DoorHighlightRow", "INTERACTION OUTLINE HIGHLIGHTS", font, new Vector2(0f, -46f), true);
+            Slider masterVolSlider = CreateArchivalSliderRow(settingsCard.transform, "MasterVolumeRow", "MASTER AUDIO VOLUME", font, new Vector2(0f, 108f), 0f, 1f, 0.85f);
+            Slider lookSensSlider = CreateArchivalSliderRow(settingsCard.transform, "LookSensitivityRow", "CAMERA LOOK SENSITIVITY", font, new Vector2(0f, 48f), 4f, 45f, 20f);
+            Toggle doorHighlightToggle = CreateArchivalToggleRow(settingsCard.transform, "DoorHighlightRow", "INTERACTION OUTLINE HIGHLIGHTS", font, new Vector2(0f, -12f), true);
+            Toggle lowEndModeToggle = CreateArchivalToggleRow(settingsCard.transform, "LowEndModeRow", "LOW-END PC MODE (LOW RAM / NO GPU) [F8]", font, new Vector2(0f, -68f), false);
 
-            TMP_Text controlsHint = CreateTMPText(settingsCard.transform, "ControlsHint", "[ESC] Pause  |  [TAB] Guest Book  |  [E / SPACE] Advance Dialogue  |  [F6] End Night", font, 14f, FontStyles.Italic, TextAlignmentOptions.Center, HanUITheme.AgedPaper);
-            SetRect(controlsHint.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 108f), new Vector2(520f, 26f));
+            TMP_Text controlsHint = CreateTMPText(settingsCard.transform, "ControlsHint", "[ESC] Pause  |  [TAB] Guest Book  |  [F8] Low-End PC Mode  |  [F6] End Night", font, 14f, FontStyles.Italic, TextAlignmentOptions.Center, HanUITheme.AgedPaper);
+            SetRect(controlsHint.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 108f), new Vector2(540f, 26f));
 
-            Button settingsBackButton = CreateTactilePlateButton(settingsCard.transform, "SettingsBackButton", "RETURN", font, new Vector2(0f, -182f), new Vector2(280f, 54f), isPrimary: true);
+            Button settingsBackButton = CreateTactilePlateButton(settingsCard.transform, "SettingsBackButton", "RETURN", font, new Vector2(0f, -200f), new Vector2(280f, 54f), isPrimary: true);
             settingsPanel.SetActive(false);
 
             // --- H. Credits Modal Sub-Panel ---
@@ -277,6 +278,7 @@ namespace Han.CheckIn.Editor
             HanUIFocusNavigator focusNavigator = managerObj.AddComponent<HanUIFocusNavigator>();
             GameLoopManager loopManager = managerObj.AddComponent<GameLoopManager>();
             managerObj.AddComponent<NightCompletionTrigger>();
+            managerObj.AddComponent<HanLowEndOptimizer>();
 
             // Create URP Pause Depth-of-Field Blur Volume child
             Volume pauseBlurVolume = CreatePauseBlurVolume(managerObj.transform);
@@ -322,6 +324,7 @@ namespace Han.CheckIn.Editor
             so.FindProperty("masterVolumeSlider").objectReferenceValue = masterVolSlider;
             so.FindProperty("lookSensitivitySlider").objectReferenceValue = lookSensSlider;
             so.FindProperty("doorHighlightToggle").objectReferenceValue = doorHighlightToggle;
+            so.FindProperty("lowEndModeToggle").objectReferenceValue = lowEndModeToggle;
 
             so.FindProperty("creditsPanel").objectReferenceValue = creditsPanel;
             so.FindProperty("creditsCanvasGroup").objectReferenceValue = creditsCanvasGroup;

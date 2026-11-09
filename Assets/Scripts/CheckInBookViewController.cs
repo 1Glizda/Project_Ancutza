@@ -60,9 +60,16 @@ namespace Han.CheckIn
         [SerializeField] private Vector3 loweredLocalEuler = new Vector3(60f, 0f, 0f);
 
         [Header("Desk Mode Poses (Strict Character vs Book Focus)")]
-        [Tooltip("Local position relative to camera when resting on desk / looking at traveler.")]
-        [SerializeField] private Vector3 deskRestPosition = new Vector3(0f, -0.21f, 0.49f);
-        [SerializeField] private Vector3 deskRestEuler = new Vector3(26f, 0f, 0f);
+        [Tooltip("Local position relative to camera when lowered (looking forward at the traveler). Keep low so the whole NPC is visible.")]
+        [SerializeField] private Vector3 deskRestPosition = new Vector3(0f, -0.55f, 0.45f);
+        [SerializeField] private Vector3 deskRestEuler = new Vector3(35f, 0f, 0f);
+
+        [Tooltip("Camera pitch (degrees down) at which the book starts rising.")]
+        [SerializeField] private float deskBookStartPitch = 5f;
+        [Tooltip("Camera pitch (degrees down) at which the whole book is fully in view.")]
+        [SerializeField] private float deskBookFullPitch = 20f;
+        [Tooltip("Seconds for the book to follow the camera pitch.")]
+        [SerializeField] private float deskBookFollowTime = 0.25f;
 
         [Tooltip("Key to toggle focus between traveler and book during check-in.")]
         [SerializeField] private KeyCode toggleFocusKey = KeyCode.Q;
@@ -129,6 +136,9 @@ namespace Han.CheckIn
         [Header("Procedural 3D Micro-Sway (Doom / Retro Juiciness)")]
         [Tooltip("Enable subtle breathing / idle bobbing when holding the book.")]
         [SerializeField] private bool enableProceduralSway = true;
+        [Tooltip("Adds organic Perlin noise to the book sway for natural, non-repeating hand tremors.")]
+        [SerializeField] private bool useNoiseForSway = true;
+        [Range(0f, 1f)] [SerializeField] private float swayNoiseInfluence = 0.35f;
         [SerializeField] private float swayFrequency = 1.7f;
         [SerializeField] private float swayPosAmplitude = 0.005f;
         [SerializeField] private float swayRotAmplitude = 1.2f;
@@ -285,8 +295,10 @@ namespace Han.CheckIn
                 playerMovement.isDeskMode = isInDeskMode;
                 if (isInDeskMode)
                 {
-                    playerMovement.deskTargetPitch = currentFocusMode == DeskFocusMode.CharacterFocus ? 4f : 18f;
                     playerMovement.deskTargetYaw = 180f;
+                    // Glide toward the chosen focus; the player can then freely pitch the view.
+                    playerMovement.deskSnapPitch = currentFocusMode == DeskFocusMode.CharacterFocus ? 2f : deskBookFullPitch;
+                    playerMovement.deskSnapActive = true;
                 }
             }
 
@@ -554,9 +566,11 @@ namespace Han.CheckIn
                     ToggleDeskFocus();
                 }
 
-                bool lookingDownAtBook = autoRaiseOnLookDown && currentPitch >= 20f;
-                float targetFocus = (currentFocusMode == DeskFocusMode.BookFocus || lookingDownAtBook) ? 1f : 0f;
-                deskFocusProgress = Mathf.MoveTowards(deskFocusProgress, targetFocus, Time.deltaTime / Mathf.Max(0.01f, transitionDuration));
+                // Newspaper behaviour: book is lowered when looking forward at the NPC and rises
+                // smoothly into view as the player looks down.
+                float targetFocus = Mathf.InverseLerp(deskBookStartPitch, deskBookFullPitch, currentPitch);
+                deskFocusProgress = Mathf.MoveTowards(deskFocusProgress, targetFocus, Time.deltaTime / Mathf.Max(0.01f, deskBookFollowTime));
+                currentFocusMode = deskFocusProgress > 0.5f ? DeskFocusMode.BookFocus : DeskFocusMode.CharacterFocus;
             }
 
             HandleManualToggle();
@@ -790,6 +804,16 @@ namespace Han.CheckIn
                 swayTimer += Time.deltaTime * swayFrequency;
                 float sinVal = Mathf.Sin(swayTimer);
                 float cosVal = Mathf.Cos(swayTimer * 0.8f);
+
+                if (useNoiseForSway)
+                {
+                    float nX = (Mathf.PerlinNoise(swayTimer * 0.85f, 23.4f) * 2f - 1f);
+                    float nY = (Mathf.PerlinNoise(swayTimer * 0.85f, 67.8f) * 2f - 1f);
+                    float nZ = (Mathf.PerlinNoise(swayTimer * 0.85f, 91.2f) * 2f - 1f);
+
+                    sinVal = Mathf.Lerp(sinVal, nY, swayNoiseInfluence);
+                    cosVal = Mathf.Lerp(cosVal, nX, swayNoiseInfluence);
+                }
 
                 swayPosOffset = new Vector3(cosVal * swayPosAmplitude * 0.4f, sinVal * swayPosAmplitude, 0f) * t;
                 swayRotOffset = new Vector3(sinVal * swayRotAmplitude * 0.6f, 0f, cosVal * swayRotAmplitude) * t;

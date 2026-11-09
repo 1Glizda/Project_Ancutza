@@ -68,8 +68,11 @@ MonoBehaviour:
   loweredLocalPosition: {x: 0, y: -0.9, z: 0.38}
   raisedLocalEuler: {x: 12, y: 0, z: 0}
   loweredLocalEuler: {x: 60, y: 0, z: 0}
-  deskRestPosition: {x: 0, y: -0.21, z: 0.49}
-  deskRestEuler: {x: 26, y: 0, z: 0}
+  deskRestPosition: {x: 0, y: -0.55, z: 0.45}
+  deskRestEuler: {x: 35, y: 0, z: 0}
+  deskBookStartPitch: 5
+  deskBookFullPitch: 20
+  deskBookFollowTime: 0.25
   toggleFocusKey: 113
   azeMovement: {fileID: 0}
   azeCamera: {fileID: 0}
@@ -121,6 +124,8 @@ MonoBehaviour:
     m_PostInfinity: 2
     m_RotationOrder: 4
   enableProceduralSway: 1
+  useNoiseForSway: 1
+  swayNoiseInfluence: 0.35
   swayFrequency: 1.7
   swayPosAmplitude: 0.005
   swayRotAmplitude: 1.2

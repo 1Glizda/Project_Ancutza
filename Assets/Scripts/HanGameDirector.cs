@@ -128,6 +128,10 @@ namespace Han.CheckIn
         [SerializeField] private bool autoStart = true;
         [SerializeField] private bool showHud = true;
 
+        [Header("Debug Controls")]
+        [Tooltip("Key to instantly fast-forward all remaining check-ins and launch the Night phase.")]
+        [SerializeField] private KeyCode debugFastForwardKey = KeyCode.F4;
+
         [Header("Events (optional Inspector hooks)")]
         public UnityEvent onNightStarted;
         public UnityEvent onMurderDiscovered;
@@ -141,6 +145,9 @@ namespace Han.CheckIn
         public HanPhase Phase { get; private set; } = HanPhase.Idle;
         public int Night { get; private set; }
         public IReadOnlyList<GuestData> Guests => guests;
+
+        private bool fastForwardRequested = false;
+        private int activeCheckInTarget = 0;
 
         private readonly List<GuestData> guests = new List<GuestData>();
         private readonly HashSet<string> usedNames = new HashSet<string>();
@@ -259,8 +266,43 @@ namespace Han.CheckIn
                 shutterFlashAlpha = Mathf.MoveTowards(shutterFlashAlpha, 0f, Time.deltaTime * 3.2f);
             }
 
-            if (Phase == HanPhase.Night && !endNightRequested && Keyboard.current != null && Keyboard.current.nKey.wasPressedThisFrame)
+            // End night hotkey [N] or [F6]
+            if (Phase == HanPhase.Night && !endNightRequested && CheckEndNightKeyPressed())
+            {
                 RequestEndNight();
+            }
+
+            // Debug fast-forward check-ins hotkey [F4] or [K]
+            if (Phase == HanPhase.CheckIn && !fastForwardRequested && CheckFastForwardKeyPressed())
+            {
+                FastForwardCheckIns();
+            }
+        }
+
+        private bool CheckFastForwardKeyPressed()
+        {
+#if ENABLE_INPUT_SYSTEM
+            if (Keyboard.current != null && (Keyboard.current.f4Key.wasPressedThisFrame || Keyboard.current.kKey.wasPressedThisFrame))
+                return true;
+#endif
+#if ENABLE_LEGACY_INPUT_MANAGER || !ENABLE_INPUT_SYSTEM
+            if (Input.GetKeyDown(debugFastForwardKey) || Input.GetKeyDown(KeyCode.K))
+                return true;
+#endif
+            return false;
+        }
+
+        private bool CheckEndNightKeyPressed()
+        {
+#if ENABLE_INPUT_SYSTEM
+            if (Keyboard.current != null && (Keyboard.current.nKey.wasPressedThisFrame || Keyboard.current.f6Key.wasPressedThisFrame))
+                return true;
+#endif
+#if ENABLE_LEGACY_INPUT_MANAGER || !ENABLE_INPUT_SYSTEM
+            if (Input.GetKeyDown(KeyCode.N) || Input.GetKeyDown(KeyCode.F6))
+                return true;
+#endif
+            return false;
         }
 
         // ------------------------------------------------------------------
@@ -342,6 +384,23 @@ namespace Han.CheckIn
             if (Phase == HanPhase.Night) endNightRequested = true;
         }
 
+        /// <summary>
+        /// Debug button / hotkey: Instantly fast-forwards all remaining check-ins for tonight,
+        /// auto-registering travelers in the ledger and immediately launching the Night phase.
+        /// </summary>
+        [ContextMenu("Debug: Fast-Forward Check-Ins to Night (F4)")]
+        public void FastForwardCheckIns()
+        {
+            if (Phase != HanPhase.CheckIn)
+            {
+                Debug.LogWarning($"<color=#E6C280>[HanGameDirector]</color> Cannot fast-forward check-ins: currently in phase {Phase}. (Fast-Forward is only available during CheckIn).");
+                return;
+            }
+
+            fastForwardRequested = true;
+            Debug.Log($"<color=#FFD700>[HanGameDirector]</color> ⏩ Fast-Forward triggered! Accelerating check-ins to launch Night {Night}...");
+        }
+
         /// <summary>Toggles a guest in the kick-out selection. Returns false if the limit is reached.</summary>
         public bool ToggleKickSelection(GuestData g)
         {
@@ -415,12 +474,27 @@ namespace Han.CheckIn
 
             Debug.Log($"[Han] Night {Night} evening: target {target} guests ({existing} staying, {needed} arriving, {requiredMonsters} monster(s) required).");
             Toast($"Night {Night}: travelers arrive at the Han desk...");
+            fastForwardRequested = false;
+            activeCheckInTarget = target;
             RefreshHud();
 
             var wait = new WaitForSeconds(0.25f);
             for (int i = 0; i < roles.Count; i++)
             {
+                if (fastForwardRequested)
+                {
+                    AutoCheckInRemainingRoles(roles, i);
+                    break;
+                }
+
                 yield return CheckInOne(roles[i], wait);
+
+                if (fastForwardRequested)
+                {
+                    AutoCheckInRemainingRoles(roles, i + 1);
+                    break;
+                }
+
                 if (i < roles.Count - 1)
                     yield return new WaitForSeconds(Mathf.Min(checkInInterval, 1.2f));
             }
@@ -494,6 +568,11 @@ namespace Han.CheckIn
             //      of the desk (using a fast tween/lerp coroutine)
             // =========================================================================
             yield return TranslateNpcToDeskCoroutine(npc, entranceStart, desk, npcArrivalTweenDuration);
+            if (fastForwardRequested)
+            {
+                CompleteAndDismissActiveDeskGuest(g, npc);
+                yield break;
+            }
             if (npc == null) yield break;
 
             // =========================================================================
@@ -505,8 +584,21 @@ namespace Han.CheckIn
             //    - Smoothly pan the camera cinematically from the book up to the character
             // =========================================================================
             yield return null;
-            Sprite capturedMugshot = CaptureMugshot(npc);
-            if (capturedMugshot != null) g.portrait = capturedMugshot;
+            if (fastForwardRequested)
+            {
+                CompleteAndDismissActiveDeskGuest(g, npc);
+                yield break;
+            }
+
+            if (!HanLowEndOptimizer.IsLowEndModeEnabled)
+            {
+                Sprite capturedMugshot = CaptureMugshot(npc);
+                if (capturedMugshot != null)
+                {
+                    if (g.portrait != null) Destroy(g.portrait);
+                    g.portrait = capturedMugshot;
+                }
+            }
 
             // Cut camera focus directly onto the check-in book
             if (playerCameraCtrl != null)
@@ -529,8 +621,20 @@ namespace Han.CheckIn
                 yield return new WaitForSeconds(0.6f);
             }
 
+            if (fastForwardRequested)
+            {
+                CompleteAndDismissActiveDeskGuest(g, npc);
+                yield break;
+            }
+
             // Smoothly pan the camera cinematically from the book up to the character standing at the desk
             yield return PanCameraFromBookToCharacterCoroutine(bookInspectionPitch, characterFocusPitch, bookToCharacterPanDuration);
+
+            if (fastForwardRequested)
+            {
+                CompleteAndDismissActiveDeskGuest(g, npc);
+                yield break;
+            }
 
             if (npc == null) yield break;
 
@@ -569,6 +673,8 @@ namespace Han.CheckIn
 
             for (int lineIdx = 0; lineIdx < dialogueLines.Length && npc != null; lineIdx++)
             {
+                if (fastForwardRequested) break;
+
                 bool isLastLine = (lineIdx == dialogueLines.Length - 1);
                 string buttonText = isLastLine ? "Approve >>" : "Go on >>";
                 bool goOnClicked = false;
@@ -583,11 +689,19 @@ namespace Han.CheckIn
 
                 while (!goOnClicked && npc != null)
                 {
+                    if (fastForwardRequested) break;
+
                     // Ensure player movement stays strictly locked via StudiosAZE while free look remains unlocked
                     if (playerMovementSM != null && !playerMovementSM.IsMovementLocked)
                         playerMovementSM.SetMovementLocked(true, deskPlayerPosition);
                     yield return null;
                 }
+            }
+
+            if (fastForwardRequested)
+            {
+                CompleteAndDismissActiveDeskGuest(g, npc);
+                yield break;
             }
 
             if (npc != null && npc.Bubble != null)
@@ -615,6 +729,90 @@ namespace Han.CheckIn
 
             // Make sure the approved NPC moves on away from the desk to make space for a new NPC
             yield return MoveGuestAwayFromDeskCoroutine(npc, g);
+        }
+
+        private void CompleteAndDismissActiveDeskGuest(GuestData g, NPCController npc)
+        {
+            if (npc != null && npc.Bubble != null)
+                npc.Bubble.Hide();
+
+            if (bookUI != null)
+                bookUI.StampCheckedIn();
+
+            g.isCheckedIn = true;
+            if (!guests.Contains(g))
+            {
+                guests.Add(g);
+                RefreshBook(guests.Count - 1);
+                OnGuestCheckedIn?.Invoke(g);
+            }
+
+            if (npc != null)
+            {
+                if (rooms.TryGetValue(g.roomNumber, out var room) && room != null && room.bed != null)
+                {
+                    Vector3 bedPos = room.bed.transform.position;
+                    npc.transform.position = bedPos;
+                    if (npc.Agent != null)
+                    {
+                        if (!npc.Agent.enabled) npc.Agent.enabled = true;
+                        if (NavMesh.SamplePosition(bedPos, out NavMeshHit hit, 3f, NavMesh.AllAreas))
+                            npc.Agent.Warp(hit.position);
+                        npc.Agent.isStopped = true;
+                    }
+                    npc.SetHome(bedPos);
+                }
+                else
+                {
+                    Destroy(npc.gameObject);
+                }
+            }
+
+            activeDeskGuest = null;
+            activeDeskNpc = null;
+
+            if (bookViewController != null)
+                bookViewController.SetDeskMode(false);
+        }
+
+        private void AutoCheckInRemainingRoles(List<GuestRole> roles, int startIndex)
+        {
+            for (int i = startIndex; i < roles.Count; i++)
+            {
+                GuestRole role = roles[i];
+                GuestData g = GuestGenerator.Create(role, Night, usedNames, usedRooms, Mathf.Max(maxGuests, 10));
+
+                if (g.hasHorse && allocatedStalls < stableHorses.Count)
+                {
+                    g.horseStallIndex = allocatedStalls++;
+                    g.notes += $" (Cal înregistrat la grajd: Boxa #{g.horseStallIndex + 1})";
+                }
+
+                g.isCheckedIn = true;
+                guests.Add(g);
+
+                // Spawn NPC directly in their bedroom so the inn is lively and populated for the night
+                if (rooms.TryGetValue(g.roomNumber, out HanRoom room) && room != null && room.bed != null)
+                {
+                    Vector3 roomSpawn = room.bed.transform.position;
+                    NPCController npc = SpawnNpcAt(g, roomSpawn, Quaternion.identity);
+                    if (npc != null)
+                    {
+                        npc.SetHome(roomSpawn);
+                    }
+                }
+
+                Debug.Log($"<color=#FFD700>[Han Fast-Forward]</color> Auto-checked in: {g.guestName} ({g.personality}), Room #{g.roomNumber}, Horse: {g.hasHorse}, Role: {g.role}");
+                OnGuestCheckedIn?.Invoke(g);
+            }
+
+            if (guests.Count > 0)
+            {
+                RefreshBook(guests.Count - 1);
+            }
+
+            RefreshHud();
+            Toast($"All {guests.Count} travelers checked in! Night {Night} begins...");
         }
 
         private IEnumerator MoveGuestAwayFromDeskCoroutine(NPCController npc, GuestData g)
@@ -668,6 +866,7 @@ namespace Han.CheckIn
 
             while (npc != null && elapsed < timeout)
             {
+                if (fastForwardRequested) break;
                 elapsed += Time.deltaTime;
                 Vector3 flatNpcPos = new Vector3(npc.transform.position.x, desk.y, npc.transform.position.z);
                 float distFromDesk = Vector3.Distance(flatNpcPos, desk);
@@ -715,6 +914,7 @@ namespace Han.CheckIn
             float dur = Mathf.Max(0.1f, duration);
             while (elapsed < dur && npc != null)
             {
+                if (fastForwardRequested) break;
                 elapsed += Time.deltaTime;
                 float u = Mathf.Clamp01(elapsed / dur);
                 // Fast Cubic Ease-Out tween
@@ -750,6 +950,7 @@ namespace Han.CheckIn
 
             while (elapsed < dur)
             {
+                if (fastForwardRequested) break;
                 elapsed += Time.deltaTime;
                 float u = Mathf.Clamp01(elapsed / dur);
                 float smoothT = Mathf.SmoothStep(0f, 1f, u);
@@ -794,9 +995,11 @@ namespace Han.CheckIn
         {
             if (npc == null) return null;
 
+            const int mugshotSize = 128;
+
             if (snapshotRT == null)
             {
-                snapshotRT = new RenderTexture(256, 256, 16, RenderTextureFormat.ARGB32);
+                snapshotRT = new RenderTexture(mugshotSize, mugshotSize, 16, RenderTextureFormat.ARGB32);
                 snapshotRT.filterMode = FilterMode.Bilinear;
                 snapshotRT.name = "Mugshot_RT";
             }
@@ -830,13 +1033,13 @@ namespace Han.CheckIn
             RenderTexture prevActive = RenderTexture.active;
             RenderTexture.active = snapshotRT;
 
-            Texture2D tex = new Texture2D(256, 256, TextureFormat.RGBA32, false);
-            tex.ReadPixels(new Rect(0, 0, 256, 256), 0, 0);
-            tex.Apply();
+            Texture2D tex = new Texture2D(mugshotSize, mugshotSize, TextureFormat.RGBA32, false);
+            tex.ReadPixels(new Rect(0, 0, mugshotSize, mugshotSize), 0, 0);
+            tex.Apply(false, !Application.isEditor);
 
             RenderTexture.active = prevActive;
 
-            Sprite mugshot = Sprite.Create(tex, new Rect(0, 0, 256, 256), new Vector2(0.5f, 0.5f), 256f);
+            Sprite mugshot = Sprite.Create(tex, new Rect(0, 0, mugshotSize, mugshotSize), new Vector2(0.5f, 0.5f), mugshotSize);
             mugshot.name = "Mugshot_" + (npc.Guest != null ? npc.Guest.guestName : "Traveler");
             return mugshot;
         }
@@ -1354,6 +1557,15 @@ namespace Han.CheckIn
             EnsurePlayerControllers();
             Transform player = GetPlayer();
             if (player == null) return;
+
+            // Ensure Player does not have an errant camera-slicing Sprite quad child
+            Transform errantSprite = player.Find("Sprite");
+            if (errantSprite != null)
+            {
+                Debug.LogWarning("<color=#FF69B4>[HanGameDirector]</color> Removed camera-obstructing Sprite quad from Player.");
+                Destroy(errantSprite.gameObject);
+            }
+
             var all = player.GetComponentsInChildren<MonoBehaviour>(true);
             for (int i = 0; i < all.Length; i++)
             {
@@ -1462,10 +1674,11 @@ namespace Han.CheckIn
             switch (Phase)
             {
                 case HanPhase.CheckIn:
-                    hudText = $"Night {Night}  |  Evening check-ins  |  Guests in ledger: {guests.Count}";
+                    int totalTarget = activeCheckInTarget > 0 ? activeCheckInTarget : guests.Count;
+                    hudText = $"Night {Night}  |  Evening check-ins ({guests.Count}/{totalTarget})  |  [F4] Fast-Forward to Night";
                     break;
                 case HanPhase.Night:
-                    hudText = $"Night {Night}  |  Time left: {remaining}s  |  Guests: {guests.Count}  |  [N] end the night";
+                    hudText = $"Night {Night}  |  Time left: {remaining}s  |  Guests: {guests.Count}  |  [N / F6] end the night";
                     break;
                 case HanPhase.Accusation:
                     hudText = $"Night {Night}  |  Accusation";
@@ -1520,6 +1733,22 @@ namespace Han.CheckIn
 
             if (Phase != HanPhase.Ended)
                 GUI.Label(new Rect(20, 12, w - 40, 36), hudText, labelStyle);
+
+            // Fast-Forward Debug Button during CheckIn phase
+            if (Phase == HanPhase.CheckIn && !fastForwardRequested)
+            {
+                float btnW = 340f;
+                float btnH = 42f;
+                Rect btnRect = new Rect(w - btnW - 24f, 10f, btnW, btnH);
+
+                Color prevColor = GUI.backgroundColor;
+                GUI.backgroundColor = new Color(0.96f, 0.74f, 0.22f, 0.95f);
+                if (GUI.Button(btnRect, "⏩ Fast-Forward Check-Ins [F4]", buttonStyle))
+                {
+                    FastForwardCheckIns();
+                }
+                GUI.backgroundColor = prevColor;
+            }
 
             if (Time.unscaledTime < toastUntil && !string.IsNullOrEmpty(toastText))
                 GUI.Label(new Rect(w * 0.5f - 480, h - 140, 960, 100), toastText, labelStyle);
