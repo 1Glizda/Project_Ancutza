@@ -419,6 +419,8 @@ namespace Han.CheckIn
                 var scaler = canvasObj.AddComponent<CanvasScaler>();
                 scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
                 scaler.referenceResolution = new Vector2(1920, 1080);
+                scaler.matchWidthOrHeight = 0.5f;
+                scaler.referencePixelsPerUnit = 100f;
                 canvasObj.AddComponent<GraphicRaycaster>();
             }
 
@@ -432,8 +434,8 @@ namespace Han.CheckIn
             lookDownPromptRect.anchorMin = new Vector2(0.5f, 0f);
             lookDownPromptRect.anchorMax = new Vector2(0.5f, 0f);
             lookDownPromptRect.pivot = new Vector2(0.5f, 0f);
-            lookDownPromptRect.anchoredPosition = new Vector2(0f, 60f);
-            lookDownPromptRect.sizeDelta = new Vector2(250f, 38f);
+            lookDownPromptRect.anchoredPosition = new Vector2(0f, 54f);
+            lookDownPromptRect.sizeDelta = new Vector2(276f, 42f);
 
             lookDownPromptCanvasGroup = pillObj.AddComponent<CanvasGroup>();
             lookDownPromptCanvasGroup.alpha = 0f;
@@ -461,7 +463,7 @@ namespace Han.CheckIn
             badgeRect.anchorMax = new Vector2(0f, 0.5f);
             badgeRect.pivot = new Vector2(0f, 0.5f);
             badgeRect.anchoredPosition = new Vector2(10f, 0f);
-            badgeRect.sizeDelta = new Vector2(46f, 24f);
+            badgeRect.sizeDelta = new Vector2(50f, 26f);
 
             Image badgeImg = badgeObj.AddComponent<Image>();
             badgeImg.sprite = HanUITheme.GetButtonPlateSprite();
@@ -495,8 +497,8 @@ namespace Han.CheckIn
             RectTransform labelRect = labelObj.AddComponent<RectTransform>();
             labelRect.anchorMin = new Vector2(0f, 0f);
             labelRect.anchorMax = new Vector2(1f, 1f);
-            labelRect.offsetMin = new Vector2(64f, 0f);
-            labelRect.offsetMax = new Vector2(-10f, 0f);
+            labelRect.offsetMin = new Vector2(68f, 2f);
+            labelRect.offsetMax = new Vector2(-12f, -2f);
 
             lookDownPromptLabelText = labelObj.AddComponent<TextMeshProUGUI>();
             ApplyPromptLabelSettings();
@@ -508,10 +510,10 @@ namespace Han.CheckIn
             TMP_FontAsset font = HanUITheme.GetProjectFont();
             HanUITheme.ApplyCrispSDF(lookDownPromptLabelText, font);
             lookDownPromptLabelText.text = HanLocalization.Get("book.prompt_open");
-            lookDownPromptLabelText.fontSize = 14.5f;
+            lookDownPromptLabelText.fontSize = 15f;
             lookDownPromptLabelText.enableAutoSizing = true;
-            lookDownPromptLabelText.fontSizeMin = 10.5f;
-            lookDownPromptLabelText.fontSizeMax = 14.5f;
+            lookDownPromptLabelText.fontSizeMin = 10f;
+            lookDownPromptLabelText.fontSizeMax = 15f;
             lookDownPromptLabelText.color = HanUITheme.WarmParchment;
             lookDownPromptLabelText.alignment = TextAlignmentOptions.Left;
             lookDownPromptLabelText.raycastTarget = false;

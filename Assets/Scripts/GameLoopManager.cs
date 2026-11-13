@@ -190,8 +190,7 @@ namespace Han.CheckIn
         private EsmeraldaDayMood _manualMoodOverride;
         private Button _languageSwitchButton;
         private TMP_Text _languageSwitchButtonText;
-        private Button _settingsLanguageButton;
-        private TMP_Text _settingsLanguageButtonText;
+        private HanSettingsLanguageRow _settingsLanguageRow;
         private int _activeTeaserNightIndex = -1;
 
         // ------------------------------------------------------------------
@@ -1302,8 +1301,240 @@ namespace Han.CheckIn
             HanLowEndOptimizer.EnsureInstance();
             EnsureLowEndModeToggleUI();
             EnsureLanguageButtonUI();
+            ApplyPolishedLayout();
             HanLowEndOptimizer.OnLowEndModeChanged -= HandleExternalLowEndModeChanged;
             HanLowEndOptimizer.OnLowEndModeChanged += HandleExternalLowEndModeChanged;
+        }
+
+        private bool _layoutPolished;
+
+        /// <summary>
+        /// Aligns CanvasScaler, archival modal proportions, row spacing, HUD margins,
+        /// and TextMeshPro SDF crispness across existing serialized scenes and WebGL displays.
+        /// </summary>
+        private void ApplyPolishedLayout()
+        {
+            if (_layoutPolished) return;
+            _layoutPolished = true;
+
+            TMP_FontAsset font = HanUITheme.GetProjectFont();
+
+            // 1. Ensure uniform ScaleWithScreenSize (1920x1080, match=0.5) on root Canvas
+            Canvas rootCanvas = mainMenuPanel != null
+                ? mainMenuPanel.GetComponentInParent<Canvas>()
+                : (inGameHudPanel != null ? inGameHudPanel.GetComponentInParent<Canvas>() : null);
+            if (rootCanvas != null)
+            {
+                CanvasScaler scaler = rootCanvas.GetComponent<CanvasScaler>();
+                if (scaler != null)
+                {
+                    scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+                    scaler.referenceResolution = new Vector2(1920f, 1080f);
+                    scaler.matchWidthOrHeight = 0.5f;
+                }
+            }
+
+            // 2. Main Menu card & buttons
+            if (mainMenuCardRect != null)
+            {
+                mainMenuCardRect.sizeDelta = new Vector2(580f, 650f);
+                mainMenuCardRect.anchoredPosition = Vector2.zero;
+                ApplyCrispFontsInBranch(mainMenuCardRect, font);
+
+                SetCardRect(mainMenuCardRect, "DossierHeaderTag", new Vector2(0f, -34f), new Vector2(500f, 24f));
+                Transform titleTr = mainMenuCardRect.Find("GameTitle");
+                if (titleTr is RectTransform titleRt)
+                {
+                    titleRt.anchoredPosition = new Vector2(0f, -66f);
+                    titleRt.sizeDelta = new Vector2(520f, 62f);
+                    TMP_Text titleTmp = titleTr.GetComponent<TMP_Text>();
+                    if (titleTmp != null)
+                    {
+                        titleTmp.enableAutoSizing = true;
+                        titleTmp.fontSizeMin = 28f;
+                        titleTmp.fontSizeMax = 48f;
+                    }
+                }
+                SetCardRect(mainMenuCardRect, "GameSubtitle", new Vector2(0f, -130f), new Vector2(480f, 28f));
+                SetCardRect(mainMenuCardRect, "TitleDivider", new Vector2(0f, -166f), new Vector2(440f, 10f));
+                SetCardRect(mainMenuCardRect, "PlayButton", new Vector2(0f, 70f), new Vector2(380f, 60f));
+                SetCardRect(mainMenuCardRect, "SettingsButton", new Vector2(0f, -6f), new Vector2(380f, 56f));
+                SetCardRect(mainMenuCardRect, "CreditsButton", new Vector2(0f, -80f), new Vector2(380f, 56f));
+                SetCardRect(mainMenuCardRect, "ExitButton", new Vector2(0f, -154f), new Vector2(380f, 56f));
+                Transform footerTr = mainMenuCardRect.Find("MenuFooterNote");
+                if (footerTr is RectTransform footerRt)
+                {
+                    footerRt.anchoredPosition = new Vector2(0f, 26f);
+                    footerRt.sizeDelta = new Vector2(500f, 32f);
+                    TMP_Text footerTmp = footerTr.GetComponent<TMP_Text>();
+                    if (footerTmp != null)
+                    {
+                        footerTmp.enableAutoSizing = true;
+                        footerTmp.fontSizeMin = 10f;
+                        footerTmp.fontSizeMax = 13.5f;
+                    }
+                }
+            }
+
+            if (mainMenuPanel != null)
+            {
+                Transform langTr = mainMenuPanel.transform.Find("LanguageSwitchButton");
+                if (langTr is RectTransform langRt)
+                {
+                    langRt.anchoredPosition = new Vector2(-36f, -32f);
+                    langRt.sizeDelta = new Vector2(268f, 44f);
+                    EnsureButtonLeftBrassTab(langRt, HanUITheme.BurnishedGold);
+                }
+                ApplyCrispFontsInBranch(mainMenuPanel.transform, font);
+            }
+
+            // 3. Settings Modal polished vertical rhythm & row width
+            if (settingsCardRect != null)
+            {
+                settingsCardRect.sizeDelta = new Vector2(620f, 650f);
+                ApplyCrispFontsInBranch(settingsCardRect, font);
+
+                SetCardRect(settingsCardRect, "SettingsTitle", new Vector2(0f, -38f), new Vector2(520f, 46f));
+                SetCardRect(settingsCardRect, "SettingsDivider", new Vector2(0f, -92f), new Vector2(460f, 8f));
+                SetCardRect(settingsCardRect, "MasterVolumeRow", new Vector2(0f, 154f), new Vector2(510f, 54f));
+                SetCardRect(settingsCardRect, "LookSensitivityRow", new Vector2(0f, 94f), new Vector2(510f, 54f));
+                SetCardRect(settingsCardRect, "DoorHighlightRow", new Vector2(0f, 34f), new Vector2(510f, 50f));
+                SetCardRect(settingsCardRect, "LowEndModeRow", new Vector2(0f, -26f), new Vector2(510f, 50f));
+
+                _settingsLanguageRow = HanSettingsLanguageRow.EnsureOrCreate(
+                    settingsCardRect,
+                    font,
+                    new Vector2(0f, -86f),
+                    new Vector2(510f, 50f));
+                if (_settingsLanguageRow != null)
+                    _settingsLanguageRow.OnLanguagePicked = () => HanUIAudioManager.PlayClick();
+
+                if (settingsLanguageButton != null)
+                    settingsLanguageButton.gameObject.SetActive(false);
+
+                Transform hintTr = settingsCardRect.Find("ControlsHint");
+                if (hintTr is RectTransform hintRt)
+                {
+                    hintRt.anchoredPosition = new Vector2(0f, 114f);
+                    hintRt.sizeDelta = new Vector2(540f, 42f);
+                    TMP_Text hintTmp = hintTr.GetComponent<TMP_Text>();
+                    if (hintTmp != null)
+                    {
+                        hintTmp.textWrappingMode = TextWrappingModes.Normal;
+                        hintTmp.enableAutoSizing = true;
+                        hintTmp.fontSizeMin = 10f;
+                        hintTmp.fontSizeMax = 14f;
+                    }
+                }
+
+                SetCardRect(settingsCardRect, "SettingsBackButton", new Vector2(0f, -258f), new Vector2(300f, 54f));
+            }
+
+            // 4. Pause & Credits Modals
+            if (pauseModalCardRect != null)
+            {
+                pauseModalCardRect.sizeDelta = new Vector2(540f, 490f);
+                ApplyCrispFontsInBranch(pauseModalCardRect, font);
+                SetCardRect(pauseModalCardRect, "PauseDossierTag", new Vector2(0f, -34f), new Vector2(420f, 24f));
+                SetCardRect(pauseModalCardRect, "PauseTitle", new Vector2(0f, -66f), new Vector2(440f, 52f));
+                SetCardRect(pauseModalCardRect, "PauseDivider", new Vector2(0f, -124f), new Vector2(420f, 10f));
+                SetCardRect(pauseModalCardRect, "ResumeButton", new Vector2(0f, 38f), new Vector2(360f, 58f));
+                SetCardRect(pauseModalCardRect, "PauseSettingsButton", new Vector2(0f, -38f), new Vector2(360f, 56f));
+                SetCardRect(pauseModalCardRect, "PauseExitButton", new Vector2(0f, -114f), new Vector2(360f, 56f));
+            }
+
+            if (creditsCardRect != null)
+            {
+                creditsCardRect.sizeDelta = new Vector2(600f, 470f);
+                ApplyCrispFontsInBranch(creditsCardRect, font);
+                SetCardRect(creditsCardRect, "CreditsTitle", new Vector2(0f, -38f), new Vector2(480f, 46f));
+                SetCardRect(creditsCardRect, "CreditsDivider", new Vector2(0f, -92f), new Vector2(440f, 8f));
+                Transform bodyTr = creditsCardRect.Find("CreditsBody");
+                if (bodyTr is RectTransform bodyRt)
+                {
+                    bodyRt.anchoredPosition = new Vector2(0f, 16f);
+                    bodyRt.sizeDelta = new Vector2(500f, 200f);
+                    TMP_Text bodyTmp = bodyTr.GetComponent<TMP_Text>();
+                    if (bodyTmp != null)
+                    {
+                        bodyTmp.lineSpacing = 10f;
+                        bodyTmp.enableAutoSizing = true;
+                        bodyTmp.fontSizeMin = 14f;
+                        bodyTmp.fontSizeMax = 21f;
+                    }
+                }
+                SetCardRect(creditsCardRect, "CreditsBackButton", new Vector2(0f, -166f), new Vector2(280f, 54f));
+            }
+
+            // 5. In-Game HUD Top-Right Dossier
+            if (inGameHudPanel != null)
+            {
+                ApplyCrispFontsInBranch(inGameHudPanel.transform, font);
+                Transform dossierTr = inGameHudPanel.transform.Find("HudTopRightDossier");
+                if (dossierTr is RectTransform dossierRt)
+                {
+                    dossierRt.anchoredPosition = new Vector2(-28f, -22f);
+                    dossierRt.sizeDelta = new Vector2(470f, 108f);
+                    SetCardRect(dossierRt, "HudNightTitleText", new Vector2(4f, -14f), new Vector2(-36f, 30f));
+                    SetCardRect(dossierRt, "HudDivider", new Vector2(0f, -46f), new Vector2(420f, 6f));
+                    SetCardRect(dossierRt, "HudObjectiveText", new Vector2(4f, 12f), new Vector2(-36f, 40f));
+                }
+            }
+
+            // 6. Night Teaser responsive horizontal bounds for narrow/4:3 WebGL viewports
+            if (nightTeaserPanel != null)
+            {
+                ApplyCrispFontsInBranch(nightTeaserPanel.transform, font);
+                StretchTeaserText(nightTeaserPanel.transform.Find("TeaserTitleText") as RectTransform, 148f, 42f);
+                StretchTeaserText(nightTeaserPanel.transform.Find("TeaserHeadlineText") as RectTransform, 32f, 150f);
+                StretchTeaserText(nightTeaserPanel.transform.Find("TeaserSubtitleText") as RectTransform, -104f, 48f);
+            }
+        }
+
+        private static void ApplyCrispFontsInBranch(Transform root, TMP_FontAsset font)
+        {
+            if (root == null) return;
+            TMP_Text[] texts = root.GetComponentsInChildren<TMP_Text>(true);
+            for (int i = 0; i < texts.Length; i++)
+            {
+                HanUITheme.ApplyCrispSDF(texts[i], font);
+            }
+        }
+
+        private static void SetCardRect(Transform parent, string childName, Vector2 anchoredPos, Vector2 sizeDelta)
+        {
+            if (parent == null) return;
+            if (parent.Find(childName) is RectTransform rt)
+            {
+                rt.anchoredPosition = anchoredPos;
+                rt.sizeDelta = sizeDelta;
+            }
+        }
+
+        private static void EnsureButtonLeftBrassTab(RectTransform btnRt, Color tabColor)
+        {
+            if (btnRt == null || btnRt.Find("LeftBrassTab") != null) return;
+            GameObject tabObj = new GameObject("LeftBrassTab", typeof(RectTransform), typeof(Image));
+            tabObj.transform.SetParent(btnRt, false);
+            RectTransform tabRt = tabObj.GetComponent<RectTransform>();
+            tabRt.anchorMin = new Vector2(0f, 0f);
+            tabRt.anchorMax = new Vector2(0f, 1f);
+            tabRt.pivot = new Vector2(0f, 0.5f);
+            tabRt.anchoredPosition = Vector2.zero;
+            tabRt.sizeDelta = new Vector2(5f, 0f);
+            Image tabImg = tabObj.GetComponent<Image>();
+            tabImg.color = tabColor;
+            tabImg.raycastTarget = false;
+        }
+
+        private static void StretchTeaserText(RectTransform rt, float posY, float height)
+        {
+            if (rt == null) return;
+            rt.anchorMin = new Vector2(0.08f, 0.5f);
+            rt.anchorMax = new Vector2(0.92f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = new Vector2(0f, posY);
+            rt.sizeDelta = new Vector2(0f, height);
         }
 
         private void HandleLanguageChanged(HanLanguage _)
@@ -1372,52 +1603,28 @@ namespace Han.CheckIn
         {
             if (settingsCardRect == null) return;
 
-            if (_settingsLanguageButton == null)
+            // Ensure SettingsModalCard has ample vertical room for all 5 rows + ControlsHint
+            if (settingsCardRect.sizeDelta.y < 640f)
             {
-                if (settingsLanguageButton != null)
-                {
-                    _settingsLanguageButton = settingsLanguageButton;
-                    _settingsLanguageButtonText = settingsLanguageButton.GetComponentInChildren<TMP_Text>(true);
-                }
-                else
-                {
-                    Transform existing = settingsCardRect.Find("SettingsLanguageButton");
-                    if (existing != null)
-                    {
-                        _settingsLanguageButton = existing.GetComponent<Button>();
-                        _settingsLanguageButtonText = existing.GetComponentInChildren<TMP_Text>(true);
-                    }
-                    else
-                    {
-                        CreateArchivalLanguageButton(
-                            settingsCardRect,
-                            "SettingsLanguageButton",
-                            new Vector2(0.5f, 0.5f),
-                            new Vector2(0.5f, 0.5f),
-                            new Vector2(0.5f, 0.5f),
-                            new Vector2(0f, -102f),
-                            new Vector2(340f, 44f),
-                            out _settingsLanguageButton,
-                            out _settingsLanguageButtonText);
-                    }
-                }
+                settingsCardRect.sizeDelta = new Vector2(Mathf.Max(settingsCardRect.sizeDelta.x, 620f), 650f);
+                SetAnchoredY(settingsCardRect.Find("MasterVolumeRow"), 154f);
+                SetAnchoredY(settingsCardRect.Find("LookSensitivityRow"), 94f);
+                SetAnchoredY(settingsCardRect.Find("DoorHighlightRow"), 34f);
+                SetAnchoredY(settingsCardRect.Find("LowEndModeRow"), -26f);
+                SetAnchoredY(settingsCardRect.Find("ControlsHint"), 114f);
+                SetAnchoredY(settingsCardRect.Find("SettingsBackButton"), -258f);
             }
 
-            if (_settingsLanguageButtonText != null)
-                ApplyAutoSizeOnce(_settingsLanguageButtonText, 10.5f);
+            _settingsLanguageRow = HanSettingsLanguageRow.EnsureOrCreate(
+                settingsCardRect,
+                HanUITheme.GetProjectFont(),
+                new Vector2(0f, -86f),
+                new Vector2(510f, 50f));
+            if (_settingsLanguageRow != null)
+                _settingsLanguageRow.OnLanguagePicked = () => HanUIAudioManager.PlayClick();
 
-            // Ensure SettingsModalCard has ample vertical room for LowEndModeRow + SettingsLanguageButton + ControlsHint
-            if (settingsCardRect.sizeDelta.y < 615f)
-            {
-                settingsCardRect.sizeDelta = new Vector2(settingsCardRect.sizeDelta.x, 620f);
-                SetAnchoredY(settingsCardRect.Find("MasterVolumeRow"), 142f);
-                SetAnchoredY(settingsCardRect.Find("LookSensitivityRow"), 82f);
-                SetAnchoredY(settingsCardRect.Find("DoorHighlightRow"), 22f);
-                SetAnchoredY(settingsCardRect.Find("LowEndModeRow"), -36f);
-                SetAnchoredY(settingsCardRect.Find("SettingsLanguageButton"), -102f);
-                SetAnchoredY(settingsCardRect.Find("ControlsHint"), 118f);
-                SetAnchoredY(settingsCardRect.Find("SettingsBackButton"), -252f);
-            }
+            if (settingsLanguageButton != null)
+                settingsLanguageButton.gameObject.SetActive(false);
         }
 
         private static void SetAnchoredY(Transform tr, float y)
@@ -1493,11 +1700,6 @@ namespace Han.CheckIn
                 _languageSwitchButtonText.text = langBtnLabel;
                 ApplyAutoSizeOnce(_languageSwitchButtonText, 10.5f);
             }
-            if (_settingsLanguageButtonText != null)
-            {
-                _settingsLanguageButtonText.text = langBtnLabel;
-                ApplyAutoSizeOnce(_settingsLanguageButtonText, 10.5f);
-            }
 
             SetChildTmpText(mainMenuCardRect, "DossierHeaderTag", "menu.dossier_tag", 10.5f);
             SetChildTmpText(mainMenuCardRect, "GameTitle", "menu.game_title", 28f);
@@ -1520,6 +1722,7 @@ namespace Han.CheckIn
             SetChildTmpText(settingsCardRect, "LookSensitivityRow/Label", "settings.look_sensitivity", 11f);
             SetChildTmpText(settingsCardRect, "DoorHighlightRow/Label", "settings.door_highlight", 11f);
             SetChildTmpText(settingsCardRect, "LowEndModeRow/Label", "settings.low_end_mode", 11f);
+            _settingsLanguageRow?.RefreshVisuals();
             SetChildTmpText(settingsCardRect, "ControlsHint", "settings.controls_hint", 10f);
             SetButtonLabel(settingsBackButton, "ui.return");
 
@@ -1721,11 +1924,6 @@ namespace Han.CheckIn
             {
                 _languageSwitchButton.onClick.RemoveListener(OnLanguageSwitchButtonClicked);
                 _languageSwitchButton.onClick.AddListener(OnLanguageSwitchButtonClicked);
-            }
-            if (_settingsLanguageButton != null)
-            {
-                _settingsLanguageButton.onClick.RemoveListener(OnLanguageSwitchButtonClicked);
-                _settingsLanguageButton.onClick.AddListener(OnLanguageSwitchButtonClicked);
             }
         }
 

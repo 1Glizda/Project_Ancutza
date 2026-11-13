@@ -345,9 +345,9 @@ namespace Han.CheckIn
             if (globalHeaderText != null)
             {
                 globalHeaderText.text = HanLocalization.Pick(
-                    "ESMERALDA'S INN  ·  OLD WALLACHIA",
-                    "HANUL ESMERALDEI  ·  VECHEA VALAHIE",
-                    "ESMERALDA FOGADÓJA  ·  RÉGI HAVASALFÖLD");
+                    "ANCUTZA'S INN  ·  OLD WALLACHIA",
+                    "HANUL ANCUTZEI  ·  VECHEA VALAHIE",
+                    "ANCUTZA FOGADÓJA  ·  RÉGI HAVASALFÖLD");
             }
 
             if (continueHintText != null)
@@ -543,7 +543,7 @@ namespace Han.CheckIn
             tagPillRt.anchorMax = new Vector2(0f, 1f);
             tagPillRt.pivot = new Vector2(0f, 1f);
             tagPillRt.anchoredPosition = new Vector2(54f, -34f);
-            tagPillRt.sizeDelta = new Vector2(360f, 32f);
+            tagPillRt.sizeDelta = new Vector2(400f, 34f);
             Image tagPillImg = tagPillObj.GetComponent<Image>();
             tagPillImg.sprite = HanUITheme.GetButtonPlateSprite();
             tagPillImg.type = Image.Type.Sliced;
@@ -650,10 +650,10 @@ namespace Han.CheckIn
                 cardObj.transform,
                 "VN_ContinueButton",
                 HanLocalization.Pick("CONTINUE  >>", "CONTINUĂ  >>", "TOVÁBB  >>"),
-                new Vector2(246f, 44f),
+                new Vector2(256f, 46f),
                 new Vector2(1f, 0f),
                 new Vector2(1f, 0f),
-                new Vector2(-54f, 22f),
+                new Vector2(-54f, 20f),
                 font,
                 HanUITheme.StampCrimson,
                 HanUITheme.BurnishedGold,
@@ -672,7 +672,7 @@ namespace Han.CheckIn
             hintRt.anchorMin = new Vector2(0.5f, 0.5f);
             hintRt.anchorMax = new Vector2(0.5f, 0.5f);
             hintRt.pivot = new Vector2(0.5f, 0.5f);
-            hintRt.sizeDelta = new Vector2(760f, 30f);
+            hintRt.sizeDelta = new Vector2(860f, 34f);
             hintRt.anchoredPosition = new Vector2(0f, -278f);
             continueHintText = hintObj.AddComponent<TextMeshProUGUI>();
             HanUITheme.ApplyCrispSDF(continueHintText, font);
@@ -694,7 +694,7 @@ namespace Han.CheckIn
                 stageObj.transform,
                 "VN_SkipButton",
                 HanLocalization.Pick("SKIP INTRO  [ESC]", "OMITE INTRO  [ESC]", "KIHAGYÁS  [ESC]"),
-                new Vector2(228f, 44f),
+                new Vector2(240f, 44f),
                 new Vector2(1f, 1f),
                 new Vector2(1f, 1f),
                 new Vector2(-42f, -36f),

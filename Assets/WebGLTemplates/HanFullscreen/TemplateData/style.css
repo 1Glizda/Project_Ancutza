@@ -1,0 +1,193 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #14100d;
+  color: #f4ead2;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+#unity-container {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at center, #1d1612 0%, #100c0a 100%);
+}
+
+#unity-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+#unity-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: {{{ BACKGROUND_COLOR }}};
+  outline: none;
+  image-rendering: auto;
+}
+
+/* Force true edge-to-edge display scaling in fullscreen (both container & canvas) */
+#unity-container:fullscreen,
+#unity-container:-webkit-full-screen,
+#unity-container:fullscreen #unity-stage,
+#unity-container:-webkit-full-screen #unity-stage,
+#unity-container:fullscreen #unity-canvas,
+#unity-container:-webkit-full-screen #unity-canvas,
+#unity-canvas:fullscreen,
+#unity-canvas:-webkit-full-screen {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: none !important;
+  max-height: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+#unity-container:fullscreen #unity-footer,
+#unity-container:-webkit-full-screen #unity-footer {
+  display: none !important;
+}
+
+/* Archival Loading Overlay */
+#unity-loading-bar {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 28px 36px;
+  background: rgba(20, 16, 13, 0.94);
+  border: 1px solid rgba(190, 148, 86, 0.55);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.72), inset 0 0 0 4px rgba(190, 148, 86, 0.14);
+  min-width: min(380px, 82vw);
+  z-index: 20;
+}
+
+#han-loading-title {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #e6c17a;
+  text-align: center;
+}
+
+#han-loading-subtitle {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #b8aa90;
+  margin-top: -6px;
+}
+
+#unity-progress-bar-empty {
+  width: 100%;
+  height: 12px;
+  background: #0d0a08;
+  border: 1px solid rgba(190, 148, 86, 0.55);
+  padding: 2px;
+  box-sizing: border-box;
+}
+
+#unity-progress-bar-full {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, #75221a 0%, #c88d3b 55%, #e6c17a 100%);
+  transition: width 0.12s ease-out;
+}
+
+#unity-warning {
+  position: fixed;
+  left: 50%;
+  top: 18px;
+  transform: translateX(-50%);
+  z-index: 40;
+  max-width: 90vw;
+  pointer-events: auto;
+}
+
+/* Slim bottom archival bar (hidden in fullscreen) */
+#unity-footer {
+  width: 100%;
+  height: 40px;
+  flex: 0 0 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  box-sizing: border-box;
+  background: #100c0a;
+  border-top: 1px solid rgba(190, 148, 86, 0.28);
+  z-index: 10;
+}
+
+#unity-build-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #c8b698;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#unity-fullscreen-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 12px;
+  background: #231b16;
+  border: 1px solid rgba(230, 193, 122, 0.55);
+  color: #f4ead2;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+#unity-fullscreen-button:hover {
+  background: #6f1f18;
+  border-color: #e6c17a;
+}
+
+#unity-fullscreen-button img {
+  width: 14px;
+  height: 14px;
+  opacity: 0.9;
+}
+
+@media (max-width: 640px) {
+  #unity-footer {
+    height: 36px;
+    flex-basis: 36px;
+    padding: 0 10px;
+  }
+  #unity-build-title {
+    font-size: 10px;
+  }
+}

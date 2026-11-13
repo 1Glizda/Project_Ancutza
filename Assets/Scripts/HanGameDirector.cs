@@ -195,9 +195,12 @@ namespace Han.CheckIn
         private bool managedByGameLoop;
         private Coroutine activeNightRoutine;
 
-        public bool RequiresCursorUnlocked => (Phase == HanPhase.CheckIn && activeDeskGuest != null) || Phase == HanPhase.Accusation || gameEnded;
+        public bool RequiresCursorUnlocked => Phase == HanPhase.Accusation || gameEnded;
+        public float NightTimeRemaining => Phase == HanPhase.Night ? Mathf.Max(0f, nightDuration - nightElapsed) : 0f;
 
         private GUIStyle labelStyle, boxStyle, buttonStyle, toggleStyle, titleStyle;
+        private GUIStyle hudPillStyle, toastPillStyle, primaryButtonStyle, subtitleCenteredStyle, timerLabelStyle;
+        private Texture2D dimBackdropTex, brassRuleTex, solidWhiteTex;
 
         private const float Tick = 0.5f;
 
@@ -284,7 +287,7 @@ namespace Han.CheckIn
             if (g.checkInDialogueSteps != null && lineIdx >= 0 && lineIdx < g.checkInDialogueSteps.Length)
             {
                 lineText = g.checkInDialogueSteps[lineIdx].line;
-                speakerHeader = g.checkInDialogueSteps[lineIdx].isEsmeralda ? "ESMERALDA" : null;
+                speakerHeader = g.checkInDialogueSteps[lineIdx].isEsmeralda ? "ANCUTZA" : null;
             }
             else if (g.checkInSmallTalk != null && lineIdx >= 0 && lineIdx < g.checkInSmallTalk.Length)
             {
@@ -321,6 +324,9 @@ namespace Han.CheckIn
             if (snapshotCamera != null) Destroy(snapshotCamera.gameObject);
             if (snapshotRT != null) snapshotRT.Release();
             if (whiteFlashTex != null) Destroy(whiteFlashTex);
+            if (dimBackdropTex != null) Destroy(dimBackdropTex);
+            if (brassRuleTex != null) Destroy(brassRuleTex);
+            if (solidWhiteTex != null) Destroy(solidWhiteTex);
         }
 
         private void Start()
@@ -733,9 +739,9 @@ namespace Han.CheckIn
                 playerCameraCtrl.SetFreeLookLocked(false);
             }
 
-            // Show cursor so the player can click "Go on" while freely rotating the camera
-            Cursor.lockState = CursorLockMode.None;
-            Cursor.visible = true;
+            // Keep cursor locked and hidden during check-in
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
 
             activeDeskGuest = g;
             activeDeskNpc = npc;
@@ -762,7 +768,7 @@ namespace Han.CheckIn
                     ? HanLocalization.Get("director.btn_approve")
                     : HanLocalization.Get("director.btn_go_on");
                 string lineText = dialogueSteps != null ? dialogueSteps[lineIdx].line : fallbackLines[lineIdx];
-                string speakerHeader = (dialogueSteps != null && dialogueSteps[lineIdx].isEsmeralda) ? "ESMERALDA" : null;
+                string speakerHeader = (dialogueSteps != null && dialogueSteps[lineIdx].isEsmeralda) ? "ANCUTZA" : null;
 
                 bool goOnClicked = false;
                 System.Action advance = () => goOnClicked = true;
@@ -1203,10 +1209,10 @@ namespace Han.CheckIn
         // ---------------- Night ----------------
         private IEnumerator NightPhase()
         {
-            SetPhase(HanPhase.Night);
+            nightElapsed = 0f;
             murdersTonight = 0;
             endNightRequested = false;
-            nightElapsed = 0f;
+            SetPhase(HanPhase.Night);
             float nextAttempt = UnityEngine.Random.Range(murderDelayRange.x, murderDelayRange.y);
 
             // Spawn assigned horses in the stables
@@ -1836,7 +1842,7 @@ namespace Han.CheckIn
             string text;
             if (key == "__esmeralda_accept__")
             {
-                text = $"Esmeralda: „{HanDialogueCatalog.EsmeraldaAcceptLine}”";
+                text = $"Ancutza: „{HanDialogueCatalog.EsmeraldaAcceptLine}”";
             }
             else
             {
@@ -1859,7 +1865,7 @@ namespace Han.CheckIn
             }
             if (lastToastKey == "__esmeralda_accept__")
             {
-                toastText = $"Esmeralda: „{HanDialogueCatalog.EsmeraldaAcceptLine}”";
+                toastText = $"Ancutza: „{HanDialogueCatalog.EsmeraldaAcceptLine}”";
             }
             else if (!string.IsNullOrEmpty(lastToastKey))
             {
@@ -1903,20 +1909,127 @@ namespace Han.CheckIn
         {
             if (labelStyle != null) return;
             Font uiFont = HanUITheme.GetProjectImGuiFont();
-            labelStyle = new GUIStyle(GUI.skin.label) { fontSize = 22, wordWrap = true };
+
+            labelStyle = new GUIStyle(GUI.skin.label) { fontSize = 21, wordWrap = true };
             if (uiFont != null) labelStyle.font = uiFont;
             labelStyle.normal.textColor = HanUITheme.WarmParchment;
-            titleStyle = new GUIStyle(labelStyle) { fontSize = 34, alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold };
+
+            subtitleCenteredStyle = new GUIStyle(labelStyle)
+            {
+                fontSize = 21,
+                alignment = TextAnchor.MiddleCenter,
+                wordWrap = true
+            };
+            subtitleCenteredStyle.normal.textColor = HanUITheme.AgedPaper;
+
+            titleStyle = new GUIStyle(labelStyle)
+            {
+                fontSize = 32,
+                alignment = TextAnchor.MiddleCenter,
+                fontStyle = FontStyle.Bold
+            };
             titleStyle.normal.textColor = HanUITheme.BurnishedGold;
-            boxStyle = new GUIStyle(GUI.skin.box);
-            buttonStyle = new GUIStyle(GUI.skin.button) { fontSize = 24, fontStyle = FontStyle.Bold };
+
+            RectOffset sliceBorder = new RectOffset(8, 8, 8, 8);
+            Texture2D cardTex = HanUITheme.GetImGuiCardTexture();
+            Texture2D pillTex = HanUITheme.GetImGuiPillTexture();
+            Texture2D btnNorm = HanUITheme.GetImGuiButtonTexture(false, false, false);
+            Texture2D btnHover = HanUITheme.GetImGuiButtonTexture(true, false, false);
+            Texture2D btnActive = HanUITheme.GetImGuiButtonTexture(false, true, false);
+            Texture2D crimsonNorm = HanUITheme.GetImGuiButtonTexture(false, false, true);
+            Texture2D crimsonHover = HanUITheme.GetImGuiButtonTexture(true, false, true);
+
+            boxStyle = new GUIStyle(GUI.skin.box)
+            {
+                border = sliceBorder,
+                padding = new RectOffset(20, 20, 16, 16)
+            };
+            boxStyle.normal.background = cardTex;
+
+            hudPillStyle = new GUIStyle(GUI.skin.box)
+            {
+                font = uiFont,
+                fontSize = 19,
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleLeft,
+                wordWrap = true,
+                border = sliceBorder,
+                padding = new RectOffset(16, 16, 8, 8)
+            };
+            hudPillStyle.normal.background = pillTex;
+            hudPillStyle.normal.textColor = HanUITheme.WarmParchment;
+
+            toastPillStyle = new GUIStyle(hudPillStyle)
+            {
+                fontSize = 21,
+                alignment = TextAnchor.MiddleCenter,
+                padding = new RectOffset(22, 22, 12, 12)
+            };
+            toastPillStyle.normal.textColor = HanUITheme.BurnishedGold;
+
+            buttonStyle = new GUIStyle(GUI.skin.button)
+            {
+                fontSize = 22,
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleCenter,
+                border = sliceBorder,
+                padding = new RectOffset(18, 18, 8, 8)
+            };
             if (uiFont != null) buttonStyle.font = uiFont;
+            buttonStyle.normal.background = btnNorm;
+            buttonStyle.hover.background = btnHover;
+            buttonStyle.active.background = btnActive;
             buttonStyle.normal.textColor = HanUITheme.WarmParchment;
             buttonStyle.hover.textColor = HanUITheme.BurnishedGold;
-            toggleStyle = new GUIStyle(GUI.skin.button) { fontSize = 22, alignment = TextAnchor.MiddleLeft };
-            if (uiFont != null) toggleStyle.font = uiFont;
-            toggleStyle.normal.textColor = HanUITheme.WarmParchment;
-            toggleStyle.hover.textColor = HanUITheme.BurnishedGold;
+            buttonStyle.active.textColor = HanUITheme.WarmParchment;
+
+            primaryButtonStyle = new GUIStyle(buttonStyle)
+            {
+                fontSize = 21
+            };
+            primaryButtonStyle.normal.background = crimsonNorm;
+            primaryButtonStyle.hover.background = crimsonHover;
+            primaryButtonStyle.active.background = crimsonHover;
+            primaryButtonStyle.normal.textColor = HanUITheme.WarmParchment;
+            primaryButtonStyle.hover.textColor = HanUITheme.BurnishedGold;
+
+            toggleStyle = new GUIStyle(buttonStyle)
+            {
+                fontSize = 21,
+                fontStyle = FontStyle.Normal,
+                alignment = TextAnchor.MiddleLeft,
+                padding = new RectOffset(22, 18, 8, 8)
+            };
+
+            if (dimBackdropTex == null)
+            {
+                dimBackdropTex = new Texture2D(1, 1) { hideFlags = HideFlags.HideAndDontSave };
+                dimBackdropTex.SetPixel(0, 0, HanUITheme.ModalBackdropDim);
+                dimBackdropTex.Apply();
+            }
+
+            if (brassRuleTex == null)
+            {
+                brassRuleTex = new Texture2D(1, 1) { hideFlags = HideFlags.HideAndDontSave };
+                brassRuleTex.SetPixel(0, 0, new Color(HanUITheme.SubduedBrass.r, HanUITheme.SubduedBrass.g, HanUITheme.SubduedBrass.b, 0.45f));
+                brassRuleTex.Apply();
+            }
+
+            if (solidWhiteTex == null)
+            {
+                solidWhiteTex = new Texture2D(1, 1) { hideFlags = HideFlags.HideAndDontSave };
+                solidWhiteTex.SetPixel(0, 0, Color.white);
+                solidWhiteTex.Apply();
+            }
+
+            timerLabelStyle = new GUIStyle(labelStyle)
+            {
+                fontSize = 19,
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleLeft,
+                wordWrap = false
+            };
+            timerLabelStyle.normal.textColor = HanUITheme.BurnishedGold;
         }
 
         private void OnGUI()
@@ -1940,32 +2053,49 @@ namespace Han.CheckIn
             if (GameLoopManager.Instance != null && !GameLoopManager.Instance.IsGameplayActive) return;
             EnsureStyles();
 
-            float s = Screen.height / 1080f;
+            float s = HanUITheme.GetMatchedReferenceScale();
             GUI.matrix = Matrix4x4.Scale(new Vector3(s, s, 1f));
             float w = Screen.width / s;
-            float h = 1080f;
+            float h = Screen.height / s;
 
-            if (Phase != HanPhase.Ended)
-                GUI.Label(new Rect(20, 12, w - 40, 36), hudText, labelStyle);
+            float topLeftBottomY = 22f;
+            if (Phase != HanPhase.Ended && !string.IsNullOrEmpty(hudText))
+            {
+                float hudMaxW = Mathf.Clamp(w - 548f, 340f, 860f);
+                GUIContent hudContent = new GUIContent(hudText);
+                float measuredW = hudPillStyle.CalcSize(hudContent).x + 12f;
+                float pillW = Mathf.Min(hudMaxW, Mathf.Max(280f, measuredW));
+                float pillH = Mathf.Max(42f, hudPillStyle.CalcHeight(hudContent, pillW));
+                Rect hudRect = new Rect(26f, 22f, pillW, pillH);
+                GUI.Box(hudRect, hudContent, hudPillStyle);
+                topLeftBottomY = hudRect.yMax;
+            }
 
-            // Fast-Forward Debug Button during CheckIn phase
+            // Fast-Forward button sits neatly under top-left HUD bar so Top-Right Dossier is never overlapped
             if (Phase == HanPhase.CheckIn && !fastForwardRequested)
             {
-                float btnW = 340f;
+                float btnW = Mathf.Min(356f, w - 52f);
                 float btnH = 42f;
-                Rect btnRect = new Rect(w - btnW - 24f, 10f, btnW, btnH);
+                Rect btnRect = new Rect(26f, topLeftBottomY + 10f, btnW, btnH);
 
-                Color prevColor = GUI.backgroundColor;
-                GUI.backgroundColor = new Color(0.96f, 0.74f, 0.22f, 0.95f);
-                if (GUI.Button(btnRect, HanLocalization.Get("director.fast_forward_btn"), buttonStyle))
+                if (GUI.Button(btnRect, HanLocalization.Get("director.fast_forward_btn"), primaryButtonStyle))
                 {
                     FastForwardCheckIns();
                 }
-                GUI.backgroundColor = prevColor;
+            }
+            else if (Phase == HanPhase.Night)
+            {
+                DrawNightTimer(w, topLeftBottomY);
             }
 
             if (Time.unscaledTime < toastUntil && !string.IsNullOrEmpty(toastText))
-                GUI.Label(new Rect(w * 0.5f - 480, h - 140, 960, 100), toastText, labelStyle);
+            {
+                float toastW = Mathf.Min(820f, w - 64f);
+                GUIContent toastContent = new GUIContent(toastText);
+                float toastH = Mathf.Max(54f, toastPillStyle.CalcHeight(toastContent, toastW));
+                float toastY = h - 134f - toastH;
+                GUI.Box(new Rect((w - toastW) * 0.5f, toastY, toastW, toastH), toastContent, toastPillStyle);
+            }
 
             // Note: During HanPhase.CheckIn, no approval or denial options are shown.
             // The dialogue and "Go on" button are anchored directly above the character in 3D space.
@@ -1975,90 +2105,149 @@ namespace Han.CheckIn
                 DrawEnd(w, h);
         }
 
+        private void DrawNightTimer(float w, float topLeftBottomY)
+        {
+            float remainingFloat = Mathf.Max(0f, nightDuration - nightElapsed);
+            int remainingSeconds = Mathf.CeilToInt(remainingFloat);
+            int minutes = remainingSeconds / 60;
+            int seconds = remainingSeconds % 60;
+            string timerText = HanLocalization.Format("director.night_timer", $"{minutes:00}:{seconds:00}");
+
+            GUIContent timerContent = new GUIContent(timerText);
+            float measuredW = timerLabelStyle.CalcSize(timerContent).x + 32f;
+            float timerW = Mathf.Min(Mathf.Max(320f, measuredW), Mathf.Max(280f, w - 52f));
+            float timerH = 54f;
+            Rect timerRect = new Rect(26f, topLeftBottomY + 10f, timerW, timerH);
+
+            GUI.Box(timerRect, GUIContent.none, hudPillStyle);
+
+            Color prevTextColor = timerLabelStyle.normal.textColor;
+            timerLabelStyle.normal.textColor = remainingSeconds <= 30
+                ? new Color(0.95f, 0.45f, 0.38f, 1f)
+                : HanUITheme.BurnishedGold;
+            GUI.Label(new Rect(timerRect.x + 14f, timerRect.y + 6f, timerRect.width - 28f, 26f), timerContent, timerLabelStyle);
+            timerLabelStyle.normal.textColor = prevTextColor;
+
+            if (solidWhiteTex != null)
+            {
+                float ratio = nightDuration > 0.01f ? Mathf.Clamp01(remainingFloat / nightDuration) : 0f;
+                Rect trackRect = new Rect(timerRect.x + 14f, timerRect.yMax - 14f, timerRect.width - 28f, 6f);
+
+                Color prevGuiColor = GUI.color;
+                GUI.color = new Color(0.08f, 0.06f, 0.05f, 0.9f);
+                GUI.DrawTexture(trackRect, solidWhiteTex);
+
+                if (ratio > 0f)
+                {
+                    GUI.color = remainingSeconds <= 30 ? HanUITheme.StampCrimson : HanUITheme.BurnishedGold;
+                    GUI.DrawTexture(new Rect(trackRect.x, trackRect.y, trackRect.width * ratio, trackRect.height), solidWhiteTex);
+                }
+                GUI.color = prevGuiColor;
+            }
+        }
+
         private void DrawCheckInInterrogation(float w, float h)
         {
             if (activeDeskGuest == null) return;
 
-            float pw = 600f;
+            float pw = Mathf.Min(600f, w - 48f);
             float ph = 350f;
             Rect r = new Rect(24f, h - ph - 24f, pw, ph);
 
             GUI.Box(r, GUIContent.none, boxStyle);
 
             string personalityLabel = HanLocalization.GetPersonalityLabel(activeDeskGuest.personality);
-            GUI.Label(new Rect(r.x + 16, r.y + 10, pw - 32, 34), HanLocalization.Format("director.interrogate_header", activeDeskGuest.guestName, personalityLabel), titleStyle);
+            GUI.Label(new Rect(r.x + 20f, r.y + 14f, pw - 40f, 34f), HanLocalization.Format("director.interrogate_header", activeDeskGuest.guestName, personalityLabel), titleStyle);
             string horseStr = HanLocalization.Get(activeDeskGuest.hasHorse ? "director.yes" : "director.no");
-            GUI.Label(new Rect(r.x + 16, r.y + 46, pw - 32, 26), HanLocalization.Format("director.interrogate_meta", activeDeskGuest.roomNumber, horseStr, activeDeskGuest.arrivalTime), labelStyle);
+            GUI.Label(new Rect(r.x + 20f, r.y + 50f, pw - 40f, 26f), HanLocalization.Format("director.interrogate_meta", activeDeskGuest.roomNumber, horseStr, activeDeskGuest.arrivalTime), labelStyle);
 
             bool isChar = bookViewController != null && bookViewController.FocusMode == DeskFocusMode.CharacterFocus;
             string focusPrompt = HanLocalization.Get(isChar ? "director.focus_traveler" : "director.focus_ledger");
 
-            GUI.backgroundColor = isChar ? new Color(0.2f, 0.45f, 0.65f, 1f) : new Color(0.65f, 0.45f, 0.2f, 1f);
-            if (GUI.Button(new Rect(r.x + 16, r.y + 78, pw - 32, 36), focusPrompt, buttonStyle))
+            if (GUI.Button(new Rect(r.x + 20f, r.y + 82f, pw - 40f, 36f), focusPrompt, buttonStyle))
             {
                 bookViewController?.ToggleDeskFocus();
             }
-            GUI.backgroundColor = Color.white;
 
-            float qY = r.y + 122f;
-            if (GUI.Button(new Rect(r.x + 16, qY, pw - 32, 34), HanLocalization.Get("director.q1"), toggleStyle))
+            float qY = r.y + 126f;
+            if (GUI.Button(new Rect(r.x + 20f, qY, pw - 40f, 34f), HanLocalization.Get("director.q1"), toggleStyle))
                 AskQuestion(1);
 
             qY += 38f;
-            if (GUI.Button(new Rect(r.x + 16, qY, pw - 32, 34), HanLocalization.Get("director.q2"), toggleStyle))
+            if (GUI.Button(new Rect(r.x + 20f, qY, pw - 40f, 34f), HanLocalization.Get("director.q2"), toggleStyle))
                 AskQuestion(2);
 
             qY += 38f;
-            if (GUI.Button(new Rect(r.x + 16, qY, pw - 32, 34), HanLocalization.Get("director.q3"), toggleStyle))
+            if (GUI.Button(new Rect(r.x + 20f, qY, pw - 40f, 34f), HanLocalization.Get("director.q3"), toggleStyle))
                 AskQuestion(3);
 
             qY += 38f;
-            if (GUI.Button(new Rect(r.x + 16, qY, pw - 32, 34), HanLocalization.Get("director.q4"), toggleStyle))
+            if (GUI.Button(new Rect(r.x + 20f, qY, pw - 40f, 34f), HanLocalization.Get("director.q4"), toggleStyle))
                 AskQuestion(4);
 
             qY += 44f;
-            GUI.backgroundColor = new Color(0.80f, 0.22f, 0.18f, 1f);
-            if (GUI.Button(new Rect(r.x + 16, qY, pw - 32, 44), HanLocalization.Get("director.approve_stamp_btn"), buttonStyle))
+            if (GUI.Button(new Rect(r.x + 20f, qY, pw - 40f, 44f), HanLocalization.Get("director.approve_stamp_btn"), primaryButtonStyle))
             {
                 ApproveCheckIn();
             }
-            GUI.backgroundColor = Color.white;
         }
 
         private void DrawAccusation(float w, float h)
         {
-            float pw = 760f;
-            float ph = 140f + accusationCandidates.Count * 52f + 80f;
+            if (dimBackdropTex != null)
+                GUI.DrawTexture(new Rect(0f, 0f, w, h), dimBackdropTex);
+
+            float pw = Mathf.Min(780f, w - 64f);
+            float ph = 152f + accusationCandidates.Count * 54f + 92f;
             Rect r = new Rect((w - pw) * 0.5f, (h - ph) * 0.5f, pw, ph);
             GUI.Box(r, GUIContent.none, boxStyle);
-            GUI.Label(new Rect(r.x + 20, r.y + 14, pw - 40, 44), HanLocalization.Get("director.accusation_title"), titleStyle);
-            GUI.Label(new Rect(r.x + 20, r.y + 62, pw - 40, 36), HanLocalization.Format("director.accusation_select", kickTarget, selected.Count), labelStyle);
 
-            float y = r.y + 104f;
+            GUI.Label(new Rect(r.x + 28f, r.y + 20f, pw - 56f, 44f), HanLocalization.Get("director.accusation_title"), titleStyle);
+            if (brassRuleTex != null)
+                GUI.DrawTexture(new Rect(r.x + 56f, r.y + 68f, pw - 112f, 2f), brassRuleTex);
+
+            GUI.Label(new Rect(r.x + 28f, r.y + 78f, pw - 56f, 36f), HanLocalization.Format("director.accusation_select", kickTarget, selected.Count), subtitleCenteredStyle);
+
+            float y = r.y + 124f;
             for (int i = 0; i < accusationCandidates.Count; i++)
             {
                 GuestData g = accusationCandidates[i];
                 bool isSel = selected.Contains(g);
                 string label = HanLocalization.Format("director.accusation_candidate", isSel ? "[X]  " : "[  ]  ", g.guestName, g.roomNumber);
-                if (GUI.Button(new Rect(r.x + 24, y, pw - 48, 46), label, toggleStyle))
+                if (GUI.Button(new Rect(r.x + 32f, y, pw - 64f, 46f), label, isSel ? primaryButtonStyle : toggleStyle))
                     ToggleKickSelection(g);
-                y += 52f;
+                y += 54f;
             }
 
             GUI.enabled = selected.Count == kickTarget;
-            if (GUI.Button(new Rect(r.x + pw * 0.5f - 160, y + 12, 320, 52), HanLocalization.Get("director.accusation_confirm"), buttonStyle))
+            float confirmW = Mathf.Min(360f, pw - 64f);
+            if (GUI.Button(new Rect(r.x + (pw - confirmW) * 0.5f, y + 16f, confirmW, 54f), HanLocalization.Get("director.accusation_confirm"), primaryButtonStyle))
                 ConfirmKickOut();
             GUI.enabled = true;
         }
 
         private void DrawEnd(float w, float h)
         {
+            if (dimBackdropTex != null)
+                GUI.DrawTexture(new Rect(0f, 0f, w, h), dimBackdropTex);
+
             bool victory = endVictory;
-            Rect r = new Rect((w - 900) * 0.5f, (h - 360) * 0.5f, 900, 360);
+            float pw = Mathf.Min(880f, w - 64f);
+            float ph = 390f;
+            Rect r = new Rect((w - pw) * 0.5f, (h - ph) * 0.5f, pw, ph);
             GUI.Box(r, GUIContent.none, boxStyle);
-            GUI.Label(new Rect(r.x + 20, r.y + 24, 860, 60), HanLocalization.Get(victory ? "director.end_victory_title" : "director.end_defeat_title"), titleStyle);
-            GUI.Label(new Rect(r.x + 40, r.y + 110, 820, 120), endText, labelStyle);
-            if (GUI.Button(new Rect(r.x + 290, r.y + 270, 320, 56), HanLocalization.Get("director.end_play_again"), buttonStyle))
+
+            titleStyle.normal.textColor = victory ? HanUITheme.BurnishedGold : new Color(0.95f, 0.45f, 0.38f, 1f);
+            GUI.Label(new Rect(r.x + 28f, r.y + 26f, pw - 56f, 54f), HanLocalization.Get(victory ? "director.end_victory_title" : "director.end_defeat_title"), titleStyle);
+            titleStyle.normal.textColor = HanUITheme.BurnishedGold;
+
+            if (brassRuleTex != null)
+                GUI.DrawTexture(new Rect(r.x + 72f, r.y + 88f, pw - 144f, 2f), brassRuleTex);
+
+            GUI.Label(new Rect(r.x + 48f, r.y + 110f, pw - 96f, 150f), endText, subtitleCenteredStyle);
+
+            float btnW = Mathf.Min(340f, pw - 64f);
+            if (GUI.Button(new Rect(r.x + (pw - btnW) * 0.5f, r.y + ph - 82f, btnW, 54f), HanLocalization.Get("director.end_play_again"), primaryButtonStyle))
             {
                 Cursor.lockState = CursorLockMode.Locked;
                 Cursor.visible = false;
