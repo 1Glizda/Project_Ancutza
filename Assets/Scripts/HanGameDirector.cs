@@ -61,14 +61,14 @@ namespace Han.CheckIn
             int count = 0;
             for (int i = 0; i < NamesNearVictim.Count; i++)
                 if (NamesNearVictim[i] != exclude && NamesNearVictim[i] != VictimName) count++;
-            if (count == 0) return "someone";
+            if (count == 0) return HanLocalization.Get("npc.someone");
             int pick = UnityEngine.Random.Range(0, count);
             for (int i = 0; i < NamesNearVictim.Count; i++)
             {
                 if (NamesNearVictim[i] == exclude || NamesNearVictim[i] == VictimName) continue;
                 if (pick-- == 0) return NamesNearVictim[i];
             }
-            return "someone";
+            return HanLocalization.Get("npc.someone");
         }
 
         // ------------------------------------------------------------------
@@ -163,6 +163,9 @@ namespace Han.CheckIn
 
         private GuestData activeDeskGuest;
         private NPCController activeDeskNpc;
+        private int activeDeskLineIdx = -1;
+        private int activeDeskLineCount;
+        private System.Action activeDeskAdvanceCallback;
         private bool checkInApproved;
         private Camera snapshotCamera;
         private RenderTexture snapshotRT;
@@ -178,8 +181,14 @@ namespace Han.CheckIn
         private int kickTarget;
         private string hudText = "";
         private string toastText = "";
+        private string lastToastKey = "";
+        private object[] lastToastArgs;
+        private int lastAskedQuestionIdx = -1;
         private float toastUntil;
         private string endText = "";
+        private bool endVictory;
+        private string endReasonKey = "";
+        private object[] endReasonArgs;
         private bool gameEnded;
         private CursorLockMode savedLock;
         private bool savedCursorVisible;
@@ -225,14 +234,79 @@ namespace Han.CheckIn
 
         private void OnEnable()
         {
+            HanLocalization.OnLanguageChanged += HandleLanguageChanged;
             NPCController.OnBodyInspected += HandleBodyInspected;
             if (bookUI != null) bookUI.OnShutterFlash += TriggerShutterFlash;
         }
 
         private void OnDisable()
         {
+            HanLocalization.OnLanguageChanged -= HandleLanguageChanged;
             NPCController.OnBodyInspected -= HandleBodyInspected;
             if (bookUI != null) bookUI.OnShutterFlash -= TriggerShutterFlash;
+        }
+
+        private void HandleLanguageChanged(HanLanguage _)
+        {
+            for (int i = 0; i < guests.Count; i++)
+            {
+                if (guests[i] != null) GuestGenerator.ApplyLocalization(guests[i]);
+            }
+            if (activeDeskGuest != null) GuestGenerator.ApplyLocalization(activeDeskGuest);
+            if (bookUI != null) bookUI.RefreshLocalization();
+
+            if (gameEnded)
+            {
+                hudText = HanLocalization.Get(endVictory ? "director.end_victory_title" : "director.end_defeat_title");
+                if (!string.IsNullOrEmpty(endReasonKey))
+                {
+                    endText = (endReasonArgs != null && endReasonArgs.Length > 0)
+                        ? HanLocalization.Format(endReasonKey, endReasonArgs)
+                        : HanLocalization.Get(endReasonKey);
+                }
+            }
+            else
+            {
+                RefreshHud();
+            }
+
+            RefreshActiveToast();
+            RefreshActiveDeskBubble();
+        }
+
+        private static void BuildCheckInLine(GuestData g, int lineIdx, int lineCount, out string lineText, out string buttonText, out string speakerHeader)
+        {
+            bool isLastLine = (lineIdx >= lineCount - 1);
+            buttonText = isLastLine
+                ? HanLocalization.Get("director.btn_approve")
+                : HanLocalization.Get("director.btn_go_on");
+
+            if (g.checkInDialogueSteps != null && lineIdx >= 0 && lineIdx < g.checkInDialogueSteps.Length)
+            {
+                lineText = g.checkInDialogueSteps[lineIdx].line;
+                speakerHeader = g.checkInDialogueSteps[lineIdx].isEsmeralda ? "ESMERALDA" : null;
+            }
+            else if (g.checkInSmallTalk != null && lineIdx >= 0 && lineIdx < g.checkInSmallTalk.Length)
+            {
+                lineText = g.checkInSmallTalk[lineIdx];
+                speakerHeader = null;
+            }
+            else
+            {
+                lineText = HanLocalization.Get("director.fallback_checkin_line");
+                speakerHeader = null;
+            }
+        }
+
+        private void RefreshActiveDeskBubble()
+        {
+            if (Phase != HanPhase.CheckIn || activeDeskGuest == null || activeDeskNpc == null || activeDeskNpc.Bubble == null)
+                return;
+            if (!activeDeskNpc.Bubble.IsInteractiveActive || activeDeskLineIdx < 0 || activeDeskAdvanceCallback == null)
+                return;
+
+            BuildCheckInLine(activeDeskGuest, activeDeskLineIdx, activeDeskLineCount, out string lineText, out string buttonText, out string speakerHeader);
+            activeDeskNpc.Bubble.ShowInteractiveDialogue(lineText, activeDeskAdvanceCallback, buttonText, speakerHeader);
         }
 
         private void TriggerShutterFlash()
@@ -473,7 +547,7 @@ namespace Han.CheckIn
             }
 
             Debug.Log($"[Han] Night {Night} evening: target {target} guests ({existing} staying, {needed} arriving, {requiredMonsters} monster(s) required).");
-            Toast($"Night {Night}: travelers arrive at the Han desk...");
+            ToastLocalized("director.toast_arrivals", 6f, Night);
             fastForwardRequested = false;
             activeCheckInTarget = target;
             RefreshHud();
@@ -548,11 +622,13 @@ namespace Han.CheckIn
                 if (allocatedStalls < stableHorses.Count)
                 {
                     g.horseStallIndex = allocatedStalls++;
-                    g.notes += $" (Cal înregistrat la grajd: Boxa #{g.horseStallIndex + 1})";
+                    g.horseNoteKey = "guest.note.horse_stall";
+                    GuestGenerator.ApplyLocalization(g);
                 }
                 else
                 {
-                    g.notes += " (Grajdul e plin - cal priponit afară)";
+                    g.horseNoteKey = "guest.note.horse_full";
+                    GuestGenerator.ApplyLocalization(g);
                 }
             }
 
@@ -665,22 +741,38 @@ namespace Han.CheckIn
             activeDeskNpc = npc;
             checkInApproved = false;
 
-            string[] dialogueLines = (g.checkInSmallTalk != null && g.checkInSmallTalk.Length > 0)
+            CheckInDialogueStep[] dialogueSteps = (g.checkInDialogueSteps != null && g.checkInDialogueSteps.Length > 0)
+                ? g.checkInDialogueSteps
+                : null;
+
+            string[] fallbackLines = (g.checkInSmallTalk != null && g.checkInSmallTalk.Length > 0)
                 ? g.checkInSmallTalk
-                : new string[] { "Good evening, innkeeper. I seek a warm room for the night." };
+                : new string[] { HanLocalization.Get("director.fallback_checkin_line") };
 
-            Toast($"{g.guestName}: Click \"Approve\" to check them in (Free Look unlocked).");
+            int lineCount = dialogueSteps != null ? dialogueSteps.Length : fallbackLines.Length;
 
-            for (int lineIdx = 0; lineIdx < dialogueLines.Length && npc != null; lineIdx++)
+            ToastLocalized("director.toast_click_approve", 6f, g.guestName);
+
+            for (int lineIdx = 0; lineIdx < lineCount && npc != null; lineIdx++)
             {
                 if (fastForwardRequested) break;
 
-                bool isLastLine = (lineIdx == dialogueLines.Length - 1);
-                string buttonText = isLastLine ? "Approve >>" : "Go on >>";
+                bool isLastLine = (lineIdx == lineCount - 1);
+                string buttonText = isLastLine
+                    ? HanLocalization.Get("director.btn_approve")
+                    : HanLocalization.Get("director.btn_go_on");
+                string lineText = dialogueSteps != null ? dialogueSteps[lineIdx].line : fallbackLines[lineIdx];
+                string speakerHeader = (dialogueSteps != null && dialogueSteps[lineIdx].isEsmeralda) ? "ESMERALDA" : null;
+
                 bool goOnClicked = false;
+                System.Action advance = () => goOnClicked = true;
+                activeDeskLineIdx = lineIdx;
+                activeDeskLineCount = lineCount;
+                activeDeskAdvanceCallback = advance;
+
                 if (npc.Bubble != null)
                 {
-                    npc.Bubble.ShowInteractiveDialogue(dialogueLines[lineIdx], () => goOnClicked = true, buttonText);
+                    npc.Bubble.ShowInteractiveDialogue(lineText, advance, buttonText, speakerHeader);
                 }
                 else
                 {
@@ -697,6 +789,10 @@ namespace Han.CheckIn
                     yield return null;
                 }
             }
+
+            activeDeskLineIdx = -1;
+            activeDeskLineCount = 0;
+            activeDeskAdvanceCallback = null;
 
             if (fastForwardRequested)
             {
@@ -722,8 +818,9 @@ namespace Han.CheckIn
             guests.Add(g);
             RefreshBook(guests.Count - 1);
 
+            ToastLocalized("__esmeralda_accept__", 6f);
             npc.Say(g.checkInApprovedLine, 2.8f);
-            Debug.Log($"[Han] Check-in completed: {g.guestName} ({g.personality}), Room #{g.roomNumber}, Horse: {g.hasHorse} (stall {g.horseStallIndex}). (role: {g.role})");
+            Debug.Log($"[Han] Check-in completed: {g.guestName} ({g.archetype}, {g.personality}), Room #{g.roomNumber}, Horse: {g.hasHorse} (stall {g.horseStallIndex}). (role: {g.role}, monsterType: {g.monsterType})");
             OnGuestCheckedIn?.Invoke(g);
             RefreshHud();
 
@@ -770,6 +867,9 @@ namespace Han.CheckIn
 
             activeDeskGuest = null;
             activeDeskNpc = null;
+            activeDeskLineIdx = -1;
+            activeDeskLineCount = 0;
+            activeDeskAdvanceCallback = null;
 
             if (bookViewController != null)
                 bookViewController.SetDeskMode(false);
@@ -785,7 +885,8 @@ namespace Han.CheckIn
                 if (g.hasHorse && allocatedStalls < stableHorses.Count)
                 {
                     g.horseStallIndex = allocatedStalls++;
-                    g.notes += $" (Cal înregistrat la grajd: Boxa #{g.horseStallIndex + 1})";
+                    g.horseNoteKey = "guest.note.horse_stall";
+                    GuestGenerator.ApplyLocalization(g);
                 }
 
                 g.isCheckedIn = true;
@@ -812,7 +913,7 @@ namespace Han.CheckIn
             }
 
             RefreshHud();
-            Toast($"All {guests.Count} travelers checked in! Night {Night} begins...");
+            ToastLocalized("director.toast_all_checked_in", 6f, guests.Count, Night);
         }
 
         private IEnumerator MoveGuestAwayFromDeskCoroutine(NPCController npc, GuestData g)
@@ -1048,33 +1149,36 @@ namespace Han.CheckIn
         {
             if (activeDeskGuest == null || activeDeskNpc == null) return;
 
-            string answer = "";
+            lastAskedQuestionIdx = q;
+            string answer = GetQuestionAnswer(activeDeskGuest, q);
+            activeDeskNpc.Say(answer, 5.0f);
+            toastText = $"\"{answer}\"";
+            toastUntil = Time.unscaledTime + 6f;
+        }
+
+        private string GetQuestionAnswer(GuestData guest, int q)
+        {
+            if (guest == null) return "";
             switch (q)
             {
                 case 1:
-                    answer = !string.IsNullOrEmpty(activeDeskGuest.responsePurpose) 
-                        ? activeDeskGuest.responsePurpose 
-                        : "Just looking for a warm bed tonight, innkeeper.";
-                    break;
+                    return !string.IsNullOrEmpty(guest.responsePurpose)
+                        ? guest.responsePurpose
+                        : HanLocalization.Get("director.ask_fallback_purpose");
                 case 2:
-                    answer = !string.IsNullOrEmpty(activeDeskGuest.responseHorse) 
-                        ? activeDeskGuest.responseHorse 
-                        : (activeDeskGuest.hasHorse ? "My horse is stabled outside." : "I traveled on foot.");
-                    break;
+                    return !string.IsNullOrEmpty(guest.responseHorse)
+                        ? guest.responseHorse
+                        : HanLocalization.Get(guest.hasHorse ? "guest.response.horse_yes" : "guest.response.horse_no");
                 case 3:
-                    answer = !string.IsNullOrEmpty(activeDeskGuest.responseRoad) 
-                        ? activeDeskGuest.responseRoad 
-                        : "The mountain road was bitterly cold and dark.";
-                    break;
+                    return !string.IsNullOrEmpty(guest.responseRoad)
+                        ? guest.responseRoad
+                        : HanLocalization.Get("director.ask_fallback_road");
                 case 4:
-                    answer = !string.IsNullOrEmpty(activeDeskGuest.responseIdentity) 
-                        ? activeDeskGuest.responseIdentity 
-                        : "My name is written truthfully on your ledger.";
-                    break;
+                default:
+                    return !string.IsNullOrEmpty(guest.responseIdentity)
+                        ? guest.responseIdentity
+                        : HanLocalization.Get("director.ask_fallback_identity");
             }
-
-            activeDeskNpc.Say(answer, 5.0f);
-            Toast($"\"{answer}\"");
         }
 
         public void ApproveCheckIn()
@@ -1114,12 +1218,19 @@ namespace Han.CheckIn
             for (int i = 0; i < stableHorses.Count; i++)
             {
                 if (stableHorses[i] != null)
-                    stableHorses[i].SetActive(i < horseCount);
+                {
+                    bool shouldSpawn = i < horseCount;
+                    stableHorses[i].SetActive(shouldSpawn);
+                    if (shouldSpawn)
+                    {
+                        EnsureHorseBodyVisible(stableHorses[i]);
+                    }
+                }
             }
             Debug.Log($"[Han] Nightfall: {horseCount} of {stableHorses.Count} stable horse(s) spawned in the courtyard barn.");
 
             Debug.Log($"[Han] Night {Night} begins. Press N (or use the bell) to end the night early.");
-            Toast($"Night {Night} falls. Watch the guests, carry the ledger, press N to end the night.");
+            ToastLocalized("director.toast_night_falls", 6f, Night);
             OnNightStarted?.Invoke(Night);
             onNightStarted?.Invoke();
 
@@ -1214,9 +1325,9 @@ namespace Han.CheckIn
         {
             Debug.Log($"[Han] Monster {killer.guestName} is luring {victim.guestName} into Odaia #{victimRoom.roomNumber}...");
 
-            killer.npc.Say("Walk with me to your room... I have something urgent to show you.", 3.5f);
+            killer.npc.Say(HanLocalization.Get("director.lure_killer"), 3.5f);
             yield return new WaitForSeconds(1.2f);
-            victim.npc.Say("To my room? Alright... what is this about?", 3f);
+            victim.npc.Say(HanLocalization.Get("director.lure_victim"), 3f);
 
             if (victimRoom.door != null && !victimRoom.door.IsOpen && !victimRoom.door.IsMoving)
                 victimRoom.door.OpenDoor();
@@ -1297,12 +1408,15 @@ namespace Han.CheckIn
             VictimName = victim.guestName;
 
             Debug.Log($"[Han] DOOR OPENED: Player discovered the corpse of {victim.guestName} in Odaia #{room.roomNumber}! PANIC!");
-            Toast($"You opened the door to Odaia #{room.roomNumber}... and found {victim.guestName} DEAD! Panic erupts across the Han!");
+            ToastLocalized("director.toast_door_murder", 6f, room.roomNumber, victim.guestName);
 
             if (victim.isCheckedIn)
             {
                 victim.isCheckedIn = false;
-                victim.notes = $"[DECEASED - found dead in Odaia #{room.roomNumber}] " + victim.notes;
+                victim.isDeceasedInBook = true;
+                victim.deceasedRoomNumber = room.roomNumber;
+                GuestGenerator.ApplyLocalization(victim);
+                if (bookUI != null) bookUI.RefreshLocalization();
                 int idx = guests.IndexOf(victim);
                 RefreshBook(idx >= 0 ? idx : 0);
             }
@@ -1323,7 +1437,7 @@ namespace Han.CheckIn
                 MurderDiscovered = true;
                 VictimName = g.guestName;
                 Debug.Log($"[Han] BODY DISCOVERED: {g.guestName}. The whole Han is in panic.");
-                Toast($"You found the body of {g.guestName}. Everyone in the Han is on edge.");
+                ToastLocalized("director.toast_body_discovered", 6f, g.guestName);
                 TriggerPanicNear(body.transform.position);
                 OnBodyDiscovered?.Invoke(g);
                 onMurderDiscovered?.Invoke();
@@ -1332,7 +1446,10 @@ namespace Han.CheckIn
             if (g.isCheckedIn)
             {
                 g.isCheckedIn = false;
-                g.notes = "[DECEASED - found dead] " + g.notes;
+                g.isDeceasedInBook = true;
+                g.deceasedRoomNumber = 0;
+                GuestGenerator.ApplyLocalization(g);
+                if (bookUI != null) bookUI.RefreshLocalization();
                 int idx = guests.IndexOf(g);
                 RefreshBook(idx >= 0 ? idx : 0);
             }
@@ -1347,7 +1464,7 @@ namespace Han.CheckIn
                 NPCController n = all[i];
                 if (n == null || n.IsDead || n.Guest == null) continue;
                 if ((n.transform.position - center).sqrMagnitude > 12f * 12f) continue;
-                n.Say(n.Guest.role == GuestRole.Monster ? "Terrible... terrible. Who could do this?" : "A body! There is a body!");
+                n.Say(HanLocalization.Get(n.Guest.role == GuestRole.Monster ? "director.panic_monster" : "director.panic_human"));
                 shouted++;
             }
         }
@@ -1408,41 +1525,46 @@ namespace Han.CheckIn
 
             if (monsters == 0)
             {
-                EndGame(true, "All monsters have been driven out of the Han. The village is safe!");
+                EndGame(true, "director.end_victory_msg");
                 return true;
             }
             if (monsters >= humans)
             {
-                EndGame(false, "The monsters now outnumber the living. The Han belongs to them.");
+                EndGame(false, "director.end_defeat_outnumbered");
                 return true;
             }
             if (Night >= maxNights)
             {
-                EndGame(false, $"{maxNights} nights have passed and the monsters still lurk among your guests.");
+                EndGame(false, "director.end_defeat_timeout", maxNights);
                 return true;
             }
             return false;
         }
 
-        private void EndGame(bool victory, string message)
+        private void EndGame(bool victory, string reasonKey, params object[] reasonArgs)
         {
             gameEnded = true;
-            endText = message;
+            endVictory = victory;
+            endReasonKey = reasonKey;
+            endReasonArgs = reasonArgs;
+            endText = (reasonArgs != null && reasonArgs.Length > 0)
+                ? HanLocalization.Format(reasonKey, reasonArgs)
+                : HanLocalization.Get(reasonKey);
             SetPhase(HanPhase.Ended);
             SetUiMode(true);
             if (victory)
             {
-                Debug.Log("[Han] VICTORY: " + message);
+                Debug.Log("[Han] VICTORY: " + endText);
                 OnVictory?.Invoke();
                 onVictory?.Invoke();
             }
             else
             {
-                Debug.Log("[Han] DEFEAT: " + message);
-                OnDefeat?.Invoke(message);
+                Debug.Log("[Han] DEFEAT: " + endText);
+                OnDefeat?.Invoke(endText);
                 onDefeat?.Invoke();
             }
-            hudText = victory ? "VICTORY" : "DEFEAT";
+            hudText = HanLocalization.Get(victory ? "director.end_victory_title" : "director.end_defeat_title");
         }
 
         // ---------------- Dawn ----------------
@@ -1466,7 +1588,7 @@ namespace Han.CheckIn
                 }
             }
             RefreshBook(0);
-            Toast("Dawn. Some guests have quietly left. A new evening approaches...");
+            ToastLocalized("director.toast_dawn");
         }
 
         private void Despawn(GuestData g, bool walkOut)
@@ -1640,6 +1762,51 @@ namespace Han.CheckIn
                 }
                 stableHorses.Sort((a, b) => a.name.CompareTo(b.name));
             }
+
+            for (int i = 0; i < stableHorses.Count; i++)
+            {
+                if (stableHorses[i] != null)
+                {
+                    EnsureHorseBodyVisible(stableHorses[i]);
+                }
+            }
+        }
+
+        private static void EnsureHorseBodyVisible(GameObject horse)
+        {
+            if (horse == null) return;
+
+            var skinnedRenderers = horse.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+            for (int i = 0; i < skinnedRenderers.Length; i++)
+            {
+                var smr = skinnedRenderers[i];
+                if (smr == null) continue;
+                if (!smr.gameObject.activeSelf) smr.gameObject.SetActive(true);
+                smr.enabled = true;
+                smr.updateWhenOffscreen = true;
+            }
+
+            var meshRenderers = horse.GetComponentsInChildren<MeshRenderer>(true);
+            for (int i = 0; i < meshRenderers.Length; i++)
+            {
+                var mr = meshRenderers[i];
+                if (mr == null) continue;
+                if (!mr.gameObject.activeSelf) mr.gameObject.SetActive(true);
+                mr.enabled = true;
+            }
+
+            if (horse.activeInHierarchy)
+            {
+                var animators = horse.GetComponentsInChildren<Animator>(true);
+                for (int i = 0; i < animators.Length; i++)
+                {
+                    if (animators[i] != null)
+                    {
+                        animators[i].cullingMode = AnimatorCullingMode.AlwaysAnimate;
+                        animators[i].Update(0f);
+                    }
+                }
+            }
         }
 
         /// <summary>Frees the cursor and freezes the player controller while a menu is open.</summary>
@@ -1661,8 +1828,51 @@ namespace Han.CheckIn
                 if (playerControls[i] != null) playerControls[i].enabled = !on;
         }
 
+        private void ToastLocalized(string key, float seconds = 6f, params object[] args)
+        {
+            lastAskedQuestionIdx = -1;
+            lastToastKey = key;
+            lastToastArgs = args;
+            string text;
+            if (key == "__esmeralda_accept__")
+            {
+                text = $"Esmeralda: „{HanDialogueCatalog.EsmeraldaAcceptLine}”";
+            }
+            else
+            {
+                text = (args != null && args.Length > 0)
+                    ? HanLocalization.Format(key, args)
+                    : HanLocalization.Get(key);
+            }
+            toastText = text;
+            toastUntil = Time.unscaledTime + seconds;
+        }
+
+        private void RefreshActiveToast()
+        {
+            if (Time.unscaledTime >= toastUntil || string.IsNullOrEmpty(toastText)) return;
+            if (lastAskedQuestionIdx > 0 && activeDeskGuest != null)
+            {
+                string answer = GetQuestionAnswer(activeDeskGuest, lastAskedQuestionIdx);
+                toastText = $"\"{answer}\"";
+                return;
+            }
+            if (lastToastKey == "__esmeralda_accept__")
+            {
+                toastText = $"Esmeralda: „{HanDialogueCatalog.EsmeraldaAcceptLine}”";
+            }
+            else if (!string.IsNullOrEmpty(lastToastKey))
+            {
+                toastText = (lastToastArgs != null && lastToastArgs.Length > 0)
+                    ? HanLocalization.Format(lastToastKey, lastToastArgs)
+                    : HanLocalization.Get(lastToastKey);
+            }
+        }
+
         private void Toast(string text, float seconds = 6f)
         {
+            lastToastKey = "";
+            lastToastArgs = null;
             toastText = text;
             toastUntil = Time.unscaledTime + seconds;
         }
@@ -1675,13 +1885,13 @@ namespace Han.CheckIn
             {
                 case HanPhase.CheckIn:
                     int totalTarget = activeCheckInTarget > 0 ? activeCheckInTarget : guests.Count;
-                    hudText = $"Night {Night}  |  Evening check-ins ({guests.Count}/{totalTarget})  |  [F4] Fast-Forward to Night";
+                    hudText = HanLocalization.Format("director.hud_checkin", Night, guests.Count, totalTarget);
                     break;
                 case HanPhase.Night:
-                    hudText = $"Night {Night}  |  Time left: {remaining}s  |  Guests: {guests.Count}  |  [N / F6] end the night";
+                    hudText = HanLocalization.Format("director.hud_night", Night, remaining, guests.Count);
                     break;
                 case HanPhase.Accusation:
-                    hudText = $"Night {Night}  |  Accusation";
+                    hudText = HanLocalization.Format("director.hud_accusation", Night);
                     break;
             }
         }
@@ -1692,15 +1902,19 @@ namespace Han.CheckIn
         private void EnsureStyles()
         {
             if (labelStyle != null) return;
+            Font uiFont = HanUITheme.GetProjectImGuiFont();
             labelStyle = new GUIStyle(GUI.skin.label) { fontSize = 22, wordWrap = true };
+            if (uiFont != null) labelStyle.font = uiFont;
             labelStyle.normal.textColor = HanUITheme.WarmParchment;
             titleStyle = new GUIStyle(labelStyle) { fontSize = 34, alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold };
             titleStyle.normal.textColor = HanUITheme.BurnishedGold;
             boxStyle = new GUIStyle(GUI.skin.box);
             buttonStyle = new GUIStyle(GUI.skin.button) { fontSize = 24, fontStyle = FontStyle.Bold };
+            if (uiFont != null) buttonStyle.font = uiFont;
             buttonStyle.normal.textColor = HanUITheme.WarmParchment;
             buttonStyle.hover.textColor = HanUITheme.BurnishedGold;
             toggleStyle = new GUIStyle(GUI.skin.button) { fontSize = 22, alignment = TextAnchor.MiddleLeft };
+            if (uiFont != null) toggleStyle.font = uiFont;
             toggleStyle.normal.textColor = HanUITheme.WarmParchment;
             toggleStyle.hover.textColor = HanUITheme.BurnishedGold;
         }
@@ -1743,7 +1957,7 @@ namespace Han.CheckIn
 
                 Color prevColor = GUI.backgroundColor;
                 GUI.backgroundColor = new Color(0.96f, 0.74f, 0.22f, 0.95f);
-                if (GUI.Button(btnRect, "⏩ Fast-Forward Check-Ins [F4]", buttonStyle))
+                if (GUI.Button(btnRect, HanLocalization.Get("director.fast_forward_btn"), buttonStyle))
                 {
                     FastForwardCheckIns();
                 }
@@ -1771,13 +1985,13 @@ namespace Han.CheckIn
 
             GUI.Box(r, GUIContent.none, boxStyle);
 
-            GUI.Label(new Rect(r.x + 16, r.y + 10, pw - 32, 34), $"✦ INTEROGATORIU: {activeDeskGuest.guestName} ({activeDeskGuest.personality})", titleStyle);
-            GUI.Label(new Rect(r.x + 16, r.y + 46, pw - 32, 26), $"Odaia #{activeDeskGuest.roomNumber} | Cal la grajd: {(activeDeskGuest.hasHorse ? "DA" : "NU")} | Sosire: {activeDeskGuest.arrivalTime}", labelStyle);
+            string personalityLabel = HanLocalization.GetPersonalityLabel(activeDeskGuest.personality);
+            GUI.Label(new Rect(r.x + 16, r.y + 10, pw - 32, 34), HanLocalization.Format("director.interrogate_header", activeDeskGuest.guestName, personalityLabel), titleStyle);
+            string horseStr = HanLocalization.Get(activeDeskGuest.hasHorse ? "director.yes" : "director.no");
+            GUI.Label(new Rect(r.x + 16, r.y + 46, pw - 32, 26), HanLocalization.Format("director.interrogate_meta", activeDeskGuest.roomNumber, horseStr, activeDeskGuest.arrivalTime), labelStyle);
 
             bool isChar = bookViewController != null && bookViewController.FocusMode == DeskFocusMode.CharacterFocus;
-            string focusPrompt = isChar 
-                ? "[Click Drept / Q]  👁️ Focalizare: CĂLĂTOR  (Click pt Registru)" 
-                : "[Click Drept / Q]  📖 Focalizare: REGISTRU  (Click pt Călător)";
+            string focusPrompt = HanLocalization.Get(isChar ? "director.focus_traveler" : "director.focus_ledger");
 
             GUI.backgroundColor = isChar ? new Color(0.2f, 0.45f, 0.65f, 1f) : new Color(0.65f, 0.45f, 0.2f, 1f);
             if (GUI.Button(new Rect(r.x + 16, r.y + 78, pw - 32, 36), focusPrompt, buttonStyle))
@@ -1787,24 +2001,24 @@ namespace Han.CheckIn
             GUI.backgroundColor = Color.white;
 
             float qY = r.y + 122f;
-            if (GUI.Button(new Rect(r.x + 16, qY, pw - 32, 34), "[1] \"Care este scopul sosirii tale la Han?\"", toggleStyle))
+            if (GUI.Button(new Rect(r.x + 16, qY, pw - 32, 34), HanLocalization.Get("director.q1"), toggleStyle))
                 AskQuestion(1);
 
             qY += 38f;
-            if (GUI.Button(new Rect(r.x + 16, qY, pw - 32, 34), "[2] \"Ai sosit călare sau pe jos?\"", toggleStyle))
+            if (GUI.Button(new Rect(r.x + 16, qY, pw - 32, 34), HanLocalization.Get("director.q2"), toggleStyle))
                 AskQuestion(2);
 
             qY += 38f;
-            if (GUI.Button(new Rect(r.x + 16, qY, pw - 32, 34), "[3] \"Ce ai zărit pe drumul muntelui?\"", toggleStyle))
+            if (GUI.Button(new Rect(r.x + 16, qY, pw - 32, 34), HanLocalization.Get("director.q3"), toggleStyle))
                 AskQuestion(3);
 
             qY += 38f;
-            if (GUI.Button(new Rect(r.x + 16, qY, pw - 32, 34), "[4] \"Verifică numele și actele.\"", toggleStyle))
+            if (GUI.Button(new Rect(r.x + 16, qY, pw - 32, 34), HanLocalization.Get("director.q4"), toggleStyle))
                 AskQuestion(4);
 
             qY += 44f;
             GUI.backgroundColor = new Color(0.80f, 0.22f, 0.18f, 1f);
-            if (GUI.Button(new Rect(r.x + 16, qY, pw - 32, 44), "[SPACE]  ✓ APROBĂ ȘI APLICĂ ȘTAMPILA", buttonStyle))
+            if (GUI.Button(new Rect(r.x + 16, qY, pw - 32, 44), HanLocalization.Get("director.approve_stamp_btn"), buttonStyle))
             {
                 ApproveCheckIn();
             }
@@ -1817,34 +2031,34 @@ namespace Han.CheckIn
             float ph = 140f + accusationCandidates.Count * 52f + 80f;
             Rect r = new Rect((w - pw) * 0.5f, (h - ph) * 0.5f, pw, ph);
             GUI.Box(r, GUIContent.none, boxStyle);
-            GUI.Label(new Rect(r.x + 20, r.y + 14, pw - 40, 44), "The night is over. Whom do you throw out?", titleStyle);
-            GUI.Label(new Rect(r.x + 20, r.y + 62, pw - 40, 36), $"Select exactly {kickTarget}  ({selected.Count}/{kickTarget})", labelStyle);
+            GUI.Label(new Rect(r.x + 20, r.y + 14, pw - 40, 44), HanLocalization.Get("director.accusation_title"), titleStyle);
+            GUI.Label(new Rect(r.x + 20, r.y + 62, pw - 40, 36), HanLocalization.Format("director.accusation_select", kickTarget, selected.Count), labelStyle);
 
             float y = r.y + 104f;
             for (int i = 0; i < accusationCandidates.Count; i++)
             {
                 GuestData g = accusationCandidates[i];
                 bool isSel = selected.Contains(g);
-                string label = (isSel ? "[X]  " : "[  ]  ") + g.guestName + "   (room " + g.roomNumber + ")";
+                string label = HanLocalization.Format("director.accusation_candidate", isSel ? "[X]  " : "[  ]  ", g.guestName, g.roomNumber);
                 if (GUI.Button(new Rect(r.x + 24, y, pw - 48, 46), label, toggleStyle))
                     ToggleKickSelection(g);
                 y += 52f;
             }
 
             GUI.enabled = selected.Count == kickTarget;
-            if (GUI.Button(new Rect(r.x + pw * 0.5f - 160, y + 12, 320, 52), "Throw them out", buttonStyle))
+            if (GUI.Button(new Rect(r.x + pw * 0.5f - 160, y + 12, 320, 52), HanLocalization.Get("director.accusation_confirm"), buttonStyle))
                 ConfirmKickOut();
             GUI.enabled = true;
         }
 
         private void DrawEnd(float w, float h)
         {
-            bool victory = hudText == "VICTORY";
+            bool victory = endVictory;
             Rect r = new Rect((w - 900) * 0.5f, (h - 360) * 0.5f, 900, 360);
             GUI.Box(r, GUIContent.none, boxStyle);
-            GUI.Label(new Rect(r.x + 20, r.y + 24, 860, 60), victory ? "VICTORY" : "DEFEAT", titleStyle);
+            GUI.Label(new Rect(r.x + 20, r.y + 24, 860, 60), HanLocalization.Get(victory ? "director.end_victory_title" : "director.end_defeat_title"), titleStyle);
             GUI.Label(new Rect(r.x + 40, r.y + 110, 820, 120), endText, labelStyle);
-            if (GUI.Button(new Rect(r.x + 290, r.y + 270, 320, 56), "Play again", buttonStyle))
+            if (GUI.Button(new Rect(r.x + 290, r.y + 270, 320, 56), HanLocalization.Get("director.end_play_again"), buttonStyle))
             {
                 Cursor.lockState = CursorLockMode.Locked;
                 Cursor.visible = false;

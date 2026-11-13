@@ -37,7 +37,13 @@ namespace Han.CheckIn
         [Tooltip("Camera far clip plane distance in meters when Low-End Mode is ON.")]
         [SerializeField, Range(25f, 120f)] private float lowEndFarClipPlane = 45f;
 
-        [Header("Low-Mode Light Occlusion & Performance Budget")]
+        [Header("Room-Bound Light Occlusion & Performance Budget")]
+        [Tooltip("Maximum number of unoccluded realtime point/spot lights allowed simultaneously in Default/Standard Mode (matches URP AdditionalLightsPerObjectLimit).")]
+        [SerializeField, Range(4, 12)] private int maxSimultaneousStandardLights = 8;
+
+        [Tooltip("Maximum distance (meters) beyond which lights are culled in Default/Standard Mode.")]
+        [SerializeField, Range(15f, 45f)] private float maxStandardLightDistance = 30f;
+
         [Tooltip("Maximum number of unoccluded realtime point/spot lights allowed to stay enabled simultaneously in Low-End Mode.")]
         [SerializeField, Range(2, 8)] private int maxSimultaneousLowEndLights = 4;
 
@@ -45,10 +51,10 @@ namespace Han.CheckIn
         [SerializeField, Range(10f, 35f)] private float maxLightActiveDistance = 22f;
 
         [Tooltip("Number of lights raycast-tested per frame in round-robin order to keep CPU overhead near zero.")]
-        [SerializeField, Range(2, 12)] private int lightsCheckedPerFrame = 6;
+        [SerializeField, Range(2, 16)] private int lightsCheckedPerFrame = 8;
 
         [Tooltip("Speed at which lights fade in/out when occluded or revealed by doors/walls.")]
-        [SerializeField, Range(2f, 12f)] private float lightOcclusionFadeSpeed = 5.5f;
+        [SerializeField, Range(2f, 12f)] private float lightOcclusionFadeSpeed = 7.5f;
 
         private static readonly string[] StructuralOccluderKeywords =
         {
@@ -69,8 +75,10 @@ namespace Han.CheckIn
             public bool wasEnabled;
             public LightShadows shadows;
             public float range;
+            public float containedStandardRange;
             public float containedLowRange;
             public float maxCullDistance;
+            public float maxStandardCullDistance;
             public float intensity;
             public float currentVisibility;
             public float rawTargetVisibility;
@@ -205,10 +213,9 @@ namespace Han.CheckIn
                 HanUIAudioManager.PlayClick();
             }
 
-            if (IsLowEndModeEnabled)
-            {
-                UpdateLowEndLightOcclusion();
-            }
+            // Keep room-bound light occlusion active on ALL settings levels so lights never bleed through walls
+            // and never overflow URP's per-object / shadow-atlas limits.
+            UpdateLightOcclusion();
         }
 
         private bool WasHotkeyPressed()
@@ -325,8 +332,11 @@ namespace Han.CheckIn
                 if (l.type == LightType.Directional) continue;
                 if (l.name.IndexOf("InspectionLight", StringComparison.OrdinalIgnoreCase) >= 0) continue;
 
-                // Contain oversized unshadowed ranges in Low Mode so they don't bleed past room walls
+                // Contain oversized ranges so lights stay bound within their rooms on both Standard and Low-End settings
                 float origRange = l.range;
+                float containedStandard = origRange > 14f
+                    ? Mathf.Clamp(origRange * 0.72f, 12f, 16.5f)
+                    : origRange;
                 float containedRange = origRange > 12f
                     ? Mathf.Clamp(origRange * 0.58f, 9.5f, 13.5f)
                     : Mathf.Max(2.2f, origRange * 0.85f);
@@ -334,6 +344,9 @@ namespace Han.CheckIn
                 float maxCull = origRange <= 6f
                     ? Mathf.Min(maxLightActiveDistance, 13.5f)
                     : maxLightActiveDistance;
+                float maxStdCull = origRange <= 6f
+                    ? Mathf.Min(maxStandardLightDistance, 18f)
+                    : maxStandardLightDistance;
 
                 cachedLights.Add(new LightState
                 {
@@ -342,8 +355,10 @@ namespace Han.CheckIn
                     wasEnabled = l.enabled,
                     shadows = l.shadows,
                     range = origRange,
+                    containedStandardRange = containedStandard,
                     containedLowRange = containedRange,
                     maxCullDistance = maxCull,
+                    maxStandardCullDistance = maxStdCull,
                     intensity = l.intensity,
                     currentVisibility = 1f,
                     rawTargetVisibility = 1f,
@@ -440,6 +455,9 @@ namespace Han.CheckIn
                 urp.renderScale = lowEnd ? lowEndRenderScale : baselineRenderScale;
                 urp.shadowDistance = lowEnd ? 0f : baselineShadowDistance;
                 urp.supportsHDR = lowEnd ? false : baselineSupportsHDR;
+                // Depth texture is required by Vefects Fire/Smoke/Candle DepthFade shaders in Standard Mode;
+                // disable in Low-End Mode where particles are off to save the depth copy pass.
+                urp.supportsCameraDepthTexture = !lowEnd;
             }
 
             // 2. QualitySettings (VRAM Mipmap Stripping, LOD Bias, Skin Weights, Anisotropic)
@@ -516,7 +534,7 @@ namespace Han.CheckIn
                 RenderSettings.fogEndDistance = baselineFogEnd;
             }
 
-            // 4. Realtime Lights: Setup Low-End Light Occlusion or Restore Standard Mode
+            // 4. Realtime Lights: Configure shadows & room-contained ranges, then run immediate occlusion snap
             for (int i = 0; i < cachedLights.Count; i++)
             {
                 LightState ls = cachedLights[i];
@@ -531,22 +549,17 @@ namespace Han.CheckIn
                 {
                     ls.light.enabled = ls.wasEnabled;
                     ls.light.shadows = ls.shadows;
-                    ls.light.range = ls.range;
+                    ls.light.range = ls.containedStandardRange;
                     ls.light.intensity = ls.intensity;
-                    ls.currentVisibility = 1f;
-                    ls.rawTargetVisibility = 1f;
-                    ls.budgetedTargetVisibility = 1f;
                 }
                 cachedLights[i] = ls;
             }
 
-            if (lowEnd)
-            {
-                // Perform an immediate full-pass light occlusion check so the initial frame has zero wall bleed
-                EvaluateLightOcclusionBatch(cachedLights.Count, immediateSnap: true);
-            }
+            // Perform an immediate full-pass light occlusion check so the initial frame has zero wall bleed
+            EvaluateLightOcclusionBatch(cachedLights.Count, immediateSnap: true);
 
             // 5. Particle Systems (Eliminate Transparent Fire/Candle Alpha Overdraw in Low Mode)
+            bool hasOpaqueTex = urp != null && urp.supportsCameraOpaqueTexture;
             for (int i = 0; i < cachedParticles.Count; i++)
             {
                 ParticleState psState = cachedParticles[i];
@@ -561,9 +574,15 @@ namespace Han.CheckIn
                 }
                 else
                 {
+                    bool isHeatHazeWithoutOpaque = !hasOpaqueTex &&
+                        psState.renderer != null &&
+                        psState.renderer.sharedMaterial != null &&
+                        psState.renderer.sharedMaterial.shader != null &&
+                        psState.renderer.sharedMaterial.shader.name.IndexOf("Heat_Haze", StringComparison.OrdinalIgnoreCase) >= 0;
+
                     if (psState.renderer != null)
-                        psState.renderer.enabled = psState.rendererEnabled;
-                    if (psState.wasPlaying && !psState.ps.isPlaying)
+                        psState.renderer.enabled = psState.rendererEnabled && !isHeatHazeWithoutOpaque;
+                    if (psState.wasPlaying && !psState.ps.isPlaying && !isHeatHazeWithoutOpaque)
                         psState.ps.Play(true);
                 }
             }
@@ -591,11 +610,13 @@ namespace Han.CheckIn
         }
 
         // ------------------------------------------------------------------
-        //  Low-End Mode Geometric Light Occlusion & Budget Culling
+        //  Room-Bound Geometric Light Occlusion & Budget Culling (All Modes)
         // ------------------------------------------------------------------
-        private void UpdateLowEndLightOcclusion()
+        private void UpdateLightOcclusion()
         {
             if (cachedLights.Count == 0) return;
+
+            bool lowEnd = IsLowEndModeEnabled;
 
             // 1. Time-sliced raycast check for a small subset of lights this frame
             int batchCount = Mathf.Min(lightsCheckedPerFrame, cachedLights.Count);
@@ -606,7 +627,7 @@ namespace Han.CheckIn
             for (int i = 0; i < cachedLights.Count; i++)
             {
                 LightState ls = cachedLights[i];
-                if (ls.light == null || !ls.light.gameObject.activeInHierarchy) continue;
+                if (ls.light == null || !ls.light.gameObject.activeInHierarchy || !ls.wasEnabled) continue;
 
                 ls.currentVisibility = Mathf.MoveTowards(ls.currentVisibility, ls.budgetedTargetVisibility, step);
 
@@ -617,8 +638,9 @@ namespace Han.CheckIn
                 else
                 {
                     if (!ls.light.enabled) ls.light.enabled = true;
+                    float targetRange = lowEnd ? ls.containedLowRange : ls.containedStandardRange;
                     ls.light.intensity = ls.intensity * ls.currentVisibility;
-                    ls.light.range = ls.containedLowRange * Mathf.Lerp(0.45f, 1.0f, ls.currentVisibility);
+                    ls.light.range = targetRange * Mathf.Lerp(0.45f, 1.0f, ls.currentVisibility);
                 }
 
                 cachedLights[i] = ls;
@@ -630,6 +652,7 @@ namespace Han.CheckIn
             Camera cam = Camera.main;
             if (cam == null) return;
 
+            bool lowEnd = IsLowEndModeEnabled;
             Vector3 camPos = cam.transform.position;
             Vector3 camForward = cam.transform.forward;
 
@@ -641,11 +664,13 @@ namespace Han.CheckIn
             }
 
             int total = cachedLights.Count;
+            if (total == 0) return;
+
             for (int n = 0; n < countToProcess; n++)
             {
                 int idx = (lightRaycastCursor + n) % total;
                 LightState ls = cachedLights[idx];
-                if (ls.light == null || !ls.light.gameObject.activeInHierarchy)
+                if (ls.light == null || !ls.light.gameObject.activeInHierarchy || !ls.wasEnabled)
                 {
                     ls.rawTargetVisibility = 0f;
                     ls.budgetedTargetVisibility = 0f;
@@ -658,7 +683,10 @@ namespace Han.CheckIn
                 float dist = toLight.magnitude;
                 ls.lastDistance = dist;
 
-                if (dist > ls.maxCullDistance)
+                float maxDist = lowEnd ? ls.maxCullDistance : ls.maxStandardCullDistance;
+                float activeRange = lowEnd ? ls.containedLowRange : ls.containedStandardRange;
+
+                if (dist > maxDist)
                 {
                     ls.rawTargetVisibility = 0f;
                 }
@@ -668,9 +696,13 @@ namespace Han.CheckIn
                 }
                 else
                 {
-                    // View cone check: if the light is behind the camera AND its effective radius cannot reach in front of the camera, cull it
+                    // View cone check: only cull behind-camera lights if their sphere cannot reach in front of the camera
                     float dot = Vector3.Dot(camForward, toLight / dist);
-                    if (dot < -0.35f && dist > ls.containedLowRange * 0.85f)
+                    bool behindAndOutOfView = lowEnd
+                        ? (dot < -0.45f && dist > activeRange * 0.9f)
+                        : (dot < -0.55f && dist > activeRange);
+
+                    if (behindAndOutOfView)
                     {
                         ls.rawTargetVisibility = 0f;
                     }
@@ -724,6 +756,9 @@ namespace Han.CheckIn
         private void EnforceLightPerformanceBudget(bool immediateSnap)
         {
             int total = cachedLights.Count;
+            if (total == 0) return;
+
+            bool lowEnd = IsLowEndModeEnabled;
 
             // First, default all budgeted targets to 0
             for (int i = 0; i < total; i++)
@@ -733,8 +768,9 @@ namespace Han.CheckIn
                 cachedLights[i] = ls;
             }
 
-            // Pick up to maxSimultaneousLowEndLights with highest score (visibility priority, then proximity)
-            int allowed = Mathf.Clamp(maxSimultaneousLowEndLights, 1, total);
+            // Pick up to maxSimultaneous lights with highest score (visibility priority, then proximity)
+            int budgetLimit = lowEnd ? maxSimultaneousLowEndLights : maxSimultaneousStandardLights;
+            int allowed = Mathf.Clamp(budgetLimit, 1, total);
             for (int slot = 0; slot < allowed; slot++)
             {
                 int bestIdx = -1;
@@ -768,7 +804,7 @@ namespace Han.CheckIn
                 {
                     LightState ls = cachedLights[i];
                     ls.currentVisibility = ls.budgetedTargetVisibility;
-                    if (ls.light != null)
+                    if (ls.light != null && ls.wasEnabled)
                     {
                         if (ls.currentVisibility <= 0.005f)
                         {
@@ -777,8 +813,9 @@ namespace Han.CheckIn
                         else
                         {
                             ls.light.enabled = true;
+                            float targetRange = lowEnd ? ls.containedLowRange : ls.containedStandardRange;
                             ls.light.intensity = ls.intensity * ls.currentVisibility;
-                            ls.light.range = ls.containedLowRange * Mathf.Lerp(0.45f, 1.0f, ls.currentVisibility);
+                            ls.light.range = targetRange * Mathf.Lerp(0.45f, 1.0f, ls.currentVisibility);
                         }
                     }
                     cachedLights[i] = ls;

@@ -10,6 +10,41 @@ namespace Han.CheckIn
         Monster
     }
 
+    /// <summary>Folklore subtype classification for monsters (Humans stay None).</summary>
+    public enum MonsterType
+    {
+        None,
+        Vampir,
+        Strigoi,
+        Capcaun,
+        Varcolac
+    }
+
+    /// <summary>Single check-in exchange line with explicit speaker attribution (Esmeralda vs Traveler).</summary>
+    [Serializable]
+    public struct CheckInDialogueStep
+    {
+        public bool isEsmeralda;
+        [TextArea] public string line;
+
+        public CheckInDialogueStep(bool isEsmeralda, string line)
+        {
+            this.isEsmeralda = isEsmeralda;
+            this.line = line;
+        }
+    }
+
+    /// <summary>Traveler social archetype used for greeting and check-in dialogue.</summary>
+    public enum TravelerArchetype
+    {
+        Drumet,
+        Negustor,
+        Taran,
+        Cersetor,
+        Nobil,
+        Lautar
+    }
+
     /// <summary>Affects greeting, small talk, pacing, and tone at check-in.</summary>
     public enum PersonalityType
     {
@@ -70,9 +105,21 @@ namespace Han.CheckIn
         [Tooltip("Optional custom stamp or signature icon")]
         public Sprite signatureStamp;
 
+        [Tooltip("Traveler archetype reflected in Esmeralda's Romanian check-in greeting.")]
+        public TravelerArchetype archetype = TravelerArchetype.Drumet;
+
+        [Tooltip("Guest's reaction line if Esmeralda turns them away from the inn.")]
+        [TextArea] public string checkInRejectedLine;
+
+        [Tooltip("Structured check-in conversation beats with speaker attribution.")]
+        public CheckInDialogueStep[] checkInDialogueSteps;
+
         [Header("Night Loop (hidden from the ledger)")]
         [Tooltip("Secret role. Only the director and debugging should read this.")]
         public GuestRole role = GuestRole.Human;
+
+        [Tooltip("Secret monster classification (Vampir, Strigoi, Capcaun, Varcolac). Humans remain None.")]
+        public MonsterType monsterType = MonsterType.None;
 
         [Tooltip("How many nights this guest intends to stay (1-3).")]
         public int staysNights = 1;
@@ -85,6 +132,23 @@ namespace Han.CheckIn
 
         [Tooltip("False once murdered by a monster.")]
         public bool isAlive = true;
+
+        // ---- Localization keys so runtime language switches update existing guests live ----
+        [HideInInspector] public int defaultSampleId = 0;
+        [HideInInspector] public string arrivalTimeKey;
+        [HideInInspector] public string neutralNoteKey;
+        [HideInInspector] public string clueNoteKey;
+        [HideInInspector] public string horseNoteKey;
+        [HideInInspector] public bool isDeceasedInBook;
+        [HideInInspector] public int deceasedRoomNumber;
+        [HideInInspector] public int investigationSetIndex = -1;
+        [HideInInspector] public int investigationAnswerIndex = -1;
+        [HideInInspector] public int acceptReactionIndex = -1;
+        [HideInInspector] public int rejectReactionIndex = -1;
+        [HideInInspector] public int roadAnswerIndex = -1;
+        [HideInInspector] public int identityAnswerIndex = -1;
+        [HideInInspector] public bool usesGeneratedFallbackName;
+        [HideInInspector] public int generatedFallbackNumber;
 
         // ---- Runtime-only references (never serialized) ----
         [NonSerialized] public NPCController npc;

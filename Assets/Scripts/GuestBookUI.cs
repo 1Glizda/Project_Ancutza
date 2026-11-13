@@ -75,6 +75,21 @@ namespace Han.CheckIn
         [SerializeField] private AudioClip stampThudSound;
         [SerializeField] private AudioClip shutterFlashSound;
 
+        [Header("Ledger Typewriter Cadence")]
+        [Tooltip("Play a typewriter click every N non-whitespace characters.")]
+        [Range(1, 8)] [SerializeField] private int charsPerSoundTick = 2;
+        [Tooltip("Minimum interval in seconds between consecutive ledger typing sounds.")]
+        [Range(0.005f, 0.20f)] [SerializeField] private float minTickSoundInterval = 0.024f;
+        [Range(0.004f, 0.12f)] [SerializeField] private float baseNameCharInterval = 0.024f;
+        [Range(0.004f, 0.12f)] [SerializeField] private float baseMetaCharInterval = 0.019f;
+        [Range(0.004f, 0.12f)] [SerializeField] private float baseNotesCharInterval = 0.013f;
+        [Range(1.0f, 5.0f)] [SerializeField] private float punctuationCadenceMultiplier = 2.1f;
+        [Range(0.5f, 1.5f)] [SerializeField] private float soundPitchMin = 0.92f;
+        [Range(0.5f, 1.5f)] [SerializeField] private float soundPitchMax = 1.14f;
+        [Range(0f, 1f)] [SerializeField] private float soundVolume = 0.38f;
+
+        private float _lastBookTypeTickTime = -10f;
+
         private Image portraitFlashOverlay;
         private SpriteRenderer portraitFlashSpriteOverlay;
         private SpriteRenderer portraitBackingFrame;
@@ -127,8 +142,39 @@ namespace Han.CheckIn
 
         private void OnEnable()
         {
+            HanLocalization.OnLanguageChanged -= HandleLanguageChanged;
+            HanLocalization.OnLanguageChanged += HandleLanguageChanged;
+
             AutoBindHeadersIfMissing();
+            TagAndLocalizeDefaultSampleGuests();
             ApplyArchivalLayoutAndDepthFixes();
+        }
+
+        private void OnDisable()
+        {
+            HanLocalization.OnLanguageChanged -= HandleLanguageChanged;
+        }
+
+        private void HandleLanguageChanged(HanLanguage _)
+        {
+            RefreshLocalization();
+        }
+
+        /// <summary>
+        /// Refreshes headers, sample guests, and the currently visible page when the language changes.
+        /// </summary>
+        public void RefreshLocalization()
+        {
+            TagAndLocalizeDefaultSampleGuests();
+            ApplyArchivalLayoutAndDepthFixes();
+
+            if (!IsTypewriting)
+            {
+                if (guestRegistry != null && guestRegistry.Count > 0)
+                    DisplayGuest(currentPageIndex);
+                else
+                    DisplayEmpty();
+            }
         }
 
         private void Start()
@@ -136,6 +182,7 @@ namespace Han.CheckIn
             if (!Application.isPlaying) return;
 
             EnsureDefaultGuests();
+            TagAndLocalizeDefaultSampleGuests();
             ApplyArchivalLayoutAndDepthFixes();
 
             if (guestRegistry.Count > 0)
@@ -206,20 +253,20 @@ namespace Han.CheckIn
                 {
                     ConfigureTmpBox(stampTmp, new Vector2(0.174f, 0.042f), 0.118f, TextAlignmentOptions.Center, false);
                     ConfigureCrispTmpElement(stampTmp, stampOxbloodColor, 22, bookLayer);
-                    stampTmp.text = "[ ÎNREGISTRAT ]";
+                    stampTmp.text = HanLocalization.Get("book.stamp_checked_in");
                 }
             }
 
             // 2. Configure High-Resolution SDF Settings & Rich Non-Pure-Black Ink Colors
             if (titleHeaderText != null)
             {
-                titleHeaderText.text = "REGISTRUL HANULUI";
+                titleHeaderText.text = HanLocalization.Get("book.title_header");
                 ConfigureTmpBox(titleHeaderText, new Vector2(0.184f, 0.032f), 0.104f, TextAlignmentOptions.Center, false);
                 ConfigureCrispTmpElement(titleHeaderText, headerInkColor, 18, bookLayer);
             }
             if (notesHeaderText != null)
             {
-                notesHeaderText.text = "ÎNSEMNĂRI & OBSERVAȚII";
+                notesHeaderText.text = HanLocalization.Get("book.notes_header");
                 ConfigureTmpBox(notesHeaderText, new Vector2(0.184f, 0.032f), 0.090f, TextAlignmentOptions.Center, false);
                 ConfigureCrispTmpElement(notesHeaderText, headerInkColor, 18, bookLayer);
             }
@@ -251,6 +298,12 @@ namespace Han.CheckIn
                 rt.sizeDelta = sizeDelta;
             }
             tmp.fontSize = fontSize;
+            tmp.enableAutoSizing = !wordWrap;
+            if (!wordWrap)
+            {
+                tmp.fontSizeMax = fontSize;
+                tmp.fontSizeMin = fontSize * 0.65f;
+            }
             tmp.alignment = alignment;
             tmp.enableWordWrapping = wordWrap;
             tmp.overflowMode = TextOverflowModes.Overflow;
@@ -378,38 +431,82 @@ namespace Han.CheckIn
         private void EnsureDefaultGuests()
         {
             if (suppressDefaultGuests) return;
-            if (guestRegistry != null && guestRegistry.Count > 0) return;
+            if (guestRegistry != null && guestRegistry.Count > 0)
+            {
+                TagAndLocalizeDefaultSampleGuests();
+                return;
+            }
 
             guestRegistry = new List<GuestData>
             {
                 new GuestData
                 {
+                    defaultSampleId = 1,
+                    arrivalTimeKey = "arrival.sunset",
                     guestName = "Florin din Vatra",
                     roomNumber = 3,
-                    arrivalTime = "Sunset",
+                    arrivalTime = HanLocalization.Get("arrival.sunset"),
                     hasHorse = true,
                     isCheckedIn = true,
-                    notes = "Local merchant. Arrived with a heavy wooden carriage from Moldavia carrying barrels of coarse salt. Insists his mare stays locked in the east stall."
+                    notes = HanLocalization.Get("sample.guest.1.notes")
                 },
                 new GuestData
                 {
+                    defaultSampleId = 2,
+                    arrivalTimeKey = "arrival.dusk",
                     guestName = "Gheorghe Străinul",
                     roomNumber = 6,
-                    arrivalTime = "Dusk",
+                    arrivalTime = HanLocalization.Get("arrival.dusk"),
                     hasHorse = false,
                     isCheckedIn = true,
-                    notes = "Traveled alone on foot through the dark pine forest. Completely unbothered by the wolves howling outside. Avoids the polished copper mirror."
+                    notes = HanLocalization.Get("sample.guest.2.notes")
                 },
                 new GuestData
                 {
+                    defaultSampleId = 3,
+                    arrivalTimeKey = "arrival.nightfall",
                     guestName = "Doamna Ilinca",
                     roomNumber = 2,
-                    arrivalTime = "Midnight",
+                    arrivalTime = HanLocalization.Get("arrival.nightfall"),
                     hasHorse = true,
                     isCheckedIn = false,
-                    notes = "Arrived just before midnight coach departed. Refuses to lift her thick black mourning veil. Requested salt and rowan branches on the threshold."
+                    notes = HanLocalization.Get("sample.guest.3.notes")
                 }
             };
+        }
+
+        private void TagAndLocalizeDefaultSampleGuests()
+        {
+            if (guestRegistry == null || guestRegistry.Count == 0) return;
+            for (int i = 0; i < guestRegistry.Count; i++)
+            {
+                GuestData g = guestRegistry[i];
+                if (g == null) continue;
+
+                if (g.defaultSampleId == 0)
+                {
+                    if (g.guestName == "Florin din Vatra")
+                    {
+                        g.defaultSampleId = 1;
+                        g.arrivalTimeKey = "arrival.sunset";
+                    }
+                    else if (g.guestName == "Gheorghe Străinul")
+                    {
+                        g.defaultSampleId = 2;
+                        g.arrivalTimeKey = "arrival.dusk";
+                    }
+                    else if (g.guestName == "Doamna Ilinca")
+                    {
+                        g.defaultSampleId = 3;
+                        g.arrivalTimeKey = "arrival.nightfall";
+                    }
+                }
+
+                if (g.defaultSampleId > 0 || !string.IsNullOrEmpty(g.neutralNoteKey) || !string.IsNullOrEmpty(g.arrivalTimeKey))
+                {
+                    GuestGenerator.ApplyLocalization(g);
+                }
+            }
         }
 
         public void LoadGuestRegistry(List<GuestData> newGuests, int initialIndex = 0)
@@ -439,35 +536,35 @@ namespace Han.CheckIn
             if (guestNameText != null)
             {
                 guestNameText.maxVisibleCharacters = 99999;
-                guestNameText.text = string.IsNullOrEmpty(data.guestName) ? "Călător Necunoscut" : data.guestName;
+                guestNameText.text = string.IsNullOrEmpty(data.guestName) ? HanLocalization.Get("book.unknown_traveler") : data.guestName;
                 SyncTmpSubMeshes(guestNameText, 18, bookLayer);
             }
 
             if (roomNumberText != null)
             {
                 roomNumberText.maxVisibleCharacters = 99999;
-                roomNumberText.text = data.roomNumber > 0 ? $"Odaia #{data.roomNumber}" : "Fără odaie";
+                roomNumberText.text = data.roomNumber > 0 ? HanLocalization.Format("book.room_format", data.roomNumber) : HanLocalization.Get("book.no_room");
                 SyncTmpSubMeshes(roomNumberText, 18, bookLayer);
             }
 
             if (arrivalTimeText != null)
             {
                 arrivalTimeText.maxVisibleCharacters = 99999;
-                arrivalTimeText.text = $"Sosire: {data.arrivalTime}";
+                arrivalTimeText.text = HanLocalization.Format("book.arrival_format", data.arrivalTime);
                 SyncTmpSubMeshes(arrivalTimeText, 18, bookLayer);
             }
 
             if (notesText != null)
             {
                 notesText.maxVisibleCharacters = 99999;
-                notesText.text = string.IsNullOrEmpty(data.notes) ? "Nicio însemnare în registru." : data.notes;
+                notesText.text = string.IsNullOrEmpty(data.notes) ? HanLocalization.Get("book.no_notes") : data.notes;
                 SyncTmpSubMeshes(notesText, 18, bookLayer);
             }
 
             if (pageCounterText != null)
             {
                 pageCounterText.maxVisibleCharacters = 99999;
-                pageCounterText.text = $"Fila {currentPageIndex + 1} din {guestRegistry.Count}";
+                pageCounterText.text = HanLocalization.Format("book.page_counter", currentPageIndex + 1, guestRegistry.Count);
                 SyncTmpSubMeshes(pageCounterText, 18, bookLayer);
             }
 
@@ -506,11 +603,11 @@ namespace Han.CheckIn
 
         public void DisplayEmpty()
         {
-            if (guestNameText != null) guestNameText.text = "Registru Deschis";
-            if (roomNumberText != null) roomNumberText.text = "Odaia: —";
-            if (arrivalTimeText != null) arrivalTimeText.text = "Sosire: —";
-            if (notesText != null) notesText.text = "În așteptarea călătorilor la masa de recepție...";
-            if (pageCounterText != null) pageCounterText.text = "Fila 0 din 0";
+            if (guestNameText != null) guestNameText.text = HanLocalization.Get("book.empty_title");
+            if (roomNumberText != null) roomNumberText.text = HanLocalization.Get("book.empty_room");
+            if (arrivalTimeText != null) arrivalTimeText.text = HanLocalization.Get("book.empty_arrival");
+            if (notesText != null) notesText.text = HanLocalization.Get("book.empty_notes");
+            if (pageCounterText != null) pageCounterText.text = HanLocalization.Get("book.empty_page");
             if (horseStabledBadge != null) horseStabledBadge.SetActive(false);
             if (checkedInStamp != null) checkedInStamp.SetActive(false);
             if (portraitImage != null) portraitImage.color = new Color(0.18f, 0.12f, 0.08f, 0.35f);
@@ -578,7 +675,7 @@ namespace Han.CheckIn
 
             if (pageCounterText != null)
             {
-                pageCounterText.text = "Înscriere în curs...";
+                pageCounterText.text = HanLocalization.Get("book.recording_entry");
                 SyncTmpSubMeshes(pageCounterText, 18, gameObject.layer);
             }
 
@@ -586,16 +683,16 @@ namespace Han.CheckIn
                 handsController.SetTypingActive(true);
 
             // 1. Ink-Typewrite Guest Name with Baseline Settle
-            string nameStr = string.IsNullOrEmpty(data.guestName) ? "Călător Necunoscut" : data.guestName;
-            yield return TypeTextWithBaselineSettle(guestNameText, nameStr, 0.024f, primaryEntryInkColor);
+            string nameStr = string.IsNullOrEmpty(data.guestName) ? HanLocalization.Get("book.unknown_traveler") : data.guestName;
+            yield return TypeTextWithBaselineSettle(guestNameText, nameStr, Mathf.Max(0.004f, baseNameCharInterval), primaryEntryInkColor);
             PlayCarriageReturnSound();
             yield return new WaitForSeconds(0.08f);
 
             // 2. Ink-Typewrite Room & Arrival Metadata
-            string roomStr = data.roomNumber > 0 ? $"Odaia #{data.roomNumber}" : "Fără odaie";
-            string arrivalStr = $"Sosire: {data.arrivalTime}";
-            yield return TypeTextWithBaselineSettle(roomNumberText, roomStr, 0.019f, metadataInkColor);
-            yield return TypeTextWithBaselineSettle(arrivalTimeText, arrivalStr, 0.019f, metadataInkColor);
+            string roomStr = data.roomNumber > 0 ? HanLocalization.Format("book.room_format", data.roomNumber) : HanLocalization.Get("book.no_room");
+            string arrivalStr = HanLocalization.Format("book.arrival_format", data.arrivalTime);
+            yield return TypeTextWithBaselineSettle(roomNumberText, roomStr, Mathf.Max(0.004f, baseMetaCharInterval), metadataInkColor);
+            yield return TypeTextWithBaselineSettle(arrivalTimeText, arrivalStr, Mathf.Max(0.004f, baseMetaCharInterval), metadataInkColor);
             PlayCarriageReturnSound();
             yield return new WaitForSeconds(0.08f);
 
@@ -614,8 +711,8 @@ namespace Han.CheckIn
             yield return new WaitForSeconds(0.07f);
 
             // 4. Ink-Typewrite Archival Notes & Clues on Right Page
-            string noteStr = string.IsNullOrEmpty(data.notes) ? "Fără însemnări speciale." : data.notes;
-            yield return TypeTextWithBaselineSettle(notesText, noteStr, 0.013f, primaryEntryInkColor);
+            string noteStr = string.IsNullOrEmpty(data.notes) ? HanLocalization.Get("book.no_special_notes") : data.notes;
+            yield return TypeTextWithBaselineSettle(notesText, noteStr, Mathf.Max(0.004f, baseNotesCharInterval), primaryEntryInkColor);
             PlayCarriageReturnSound();
 
             if (handsController != null)
@@ -628,7 +725,7 @@ namespace Han.CheckIn
 
             if (pageCounterText != null)
             {
-                pageCounterText.text = $"Fila {Mathf.Max(1, guestRegistry.Count + 1)}";
+                pageCounterText.text = HanLocalization.Format("book.page_single", Mathf.Max(1, guestRegistry.Count + 1));
             }
 
             activeTypewriteRoutine = null;
@@ -691,12 +788,14 @@ namespace Han.CheckIn
 
                     if (!char.IsWhiteSpace(c))
                     {
-                        if (revealedCount % 2 == 1) PlayTypeSound();
+                        int step = Mathf.Max(1, charsPerSoundTick);
+                        if ((revealedCount - 1) % step == 0) PlayTypeSound();
                         OnCharacterTyped?.Invoke(c);
                     }
 
                     // Rhythmic mechanical cadence: slight pause on punctuation
-                    float cadenceMultiplier = (c == '.' || c == ',' || c == ':' || c == '-') ? 2.1f : Random.Range(0.82f, 1.18f);
+                    bool isPunct = c == '.' || c == ',' || c == ':' || c == ';' || c == '!' || c == '?' || c == '-' || c == '…';
+                    float cadenceMultiplier = isPunct ? Mathf.Max(1f, punctuationCadenceMultiplier) : Random.Range(0.82f, 1.18f);
                     nextCharTimer += charInterval * cadenceMultiplier;
                 }
 
@@ -1012,12 +1111,26 @@ namespace Han.CheckIn
             activeStampRoutine = null;
         }
 
+        public void SetTypingCadence(int tickEveryNChars, float minIntervalSeconds, float pitchMin = -1f, float pitchMax = -1f, float volume = -1f)
+        {
+            charsPerSoundTick = Mathf.Clamp(tickEveryNChars, 1, 8);
+            minTickSoundInterval = Mathf.Max(0.005f, minIntervalSeconds);
+            if (pitchMin > 0f) soundPitchMin = Mathf.Clamp(pitchMin, 0.5f, 1.5f);
+            if (pitchMax > 0f) soundPitchMax = Mathf.Clamp(Mathf.Max(soundPitchMin, pitchMax), 0.5f, 1.5f);
+            if (volume >= 0f) soundVolume = Mathf.Clamp01(volume);
+        }
+
         private void PlayTypeSound()
         {
+            if (Time.unscaledTime - _lastBookTypeTickTime < Mathf.Max(0.004f, minTickSoundInterval)) return;
+            _lastBookTypeTickTime = Time.unscaledTime;
+
             if (audioSource != null && typewriterClickSound != null)
             {
-                audioSource.pitch = Random.Range(0.92f, 1.14f);
-                audioSource.PlayOneShot(typewriterClickSound, 0.38f);
+                float lo = Mathf.Min(soundPitchMin, soundPitchMax);
+                float hi = Mathf.Max(soundPitchMin, soundPitchMax);
+                audioSource.pitch = Random.Range(lo, hi);
+                audioSource.PlayOneShot(typewriterClickSound, Mathf.Clamp01(soundVolume));
             }
         }
 

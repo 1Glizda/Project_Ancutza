@@ -386,7 +386,11 @@ namespace Han.CheckIn
                 lookDownPromptUI = existing;
                 lookDownPromptCanvasGroup = existing.GetComponent<CanvasGroup>();
                 lookDownPromptRect = existing.GetComponent<RectTransform>();
-                lookDownPromptLabelText = existing.GetComponentInChildren<TMP_Text>();
+                var promptTransform = existing.transform.Find("PromptLabel");
+                lookDownPromptLabelText = promptTransform != null
+                    ? promptTransform.GetComponent<TMP_Text>()
+                    : existing.GetComponentInChildren<TMP_Text>();
+                ApplyPromptLabelSettings();
                 return;
             }
 
@@ -495,12 +499,30 @@ namespace Han.CheckIn
             labelRect.offsetMax = new Vector2(-10f, 0f);
 
             lookDownPromptLabelText = labelObj.AddComponent<TextMeshProUGUI>();
+            ApplyPromptLabelSettings();
+        }
+
+        private void ApplyPromptLabelSettings()
+        {
+            if (lookDownPromptLabelText == null) return;
+            TMP_FontAsset font = HanUITheme.GetProjectFont();
             HanUITheme.ApplyCrispSDF(lookDownPromptLabelText, font);
-            lookDownPromptLabelText.text = promptMessage;
+            lookDownPromptLabelText.text = HanLocalization.Get("book.prompt_open");
             lookDownPromptLabelText.fontSize = 14.5f;
+            lookDownPromptLabelText.enableAutoSizing = true;
+            lookDownPromptLabelText.fontSizeMin = 10.5f;
+            lookDownPromptLabelText.fontSizeMax = 14.5f;
             lookDownPromptLabelText.color = HanUITheme.WarmParchment;
             lookDownPromptLabelText.alignment = TextAlignmentOptions.Left;
             lookDownPromptLabelText.raycastTarget = false;
+        }
+
+        private void HandleLanguageChanged(HanLanguage _)
+        {
+            if (lookDownPromptLabelText != null)
+            {
+                lookDownPromptLabelText.text = HanLocalization.Get("book.prompt_open");
+            }
         }
 
         private void UpdateLookDownPrompt()
@@ -742,8 +764,15 @@ namespace Han.CheckIn
             OnBookStateChanged?.Invoke(isBookOpen);
         }
 
+        private void OnEnable()
+        {
+            HanLocalization.OnLanguageChanged += HandleLanguageChanged;
+            HandleLanguageChanged(HanLocalization.CurrentLanguage);
+        }
+
         private void OnDisable()
         {
+            HanLocalization.OnLanguageChanged -= HandleLanguageChanged;
             if (isBookOpen)
             {
                 SetBookState(false);
