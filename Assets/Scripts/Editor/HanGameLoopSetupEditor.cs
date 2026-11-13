@@ -158,7 +158,7 @@ namespace Han.CheckIn.Editor
             CanvasGroup nightTeaserCanvasGroup = nightTeaserPanel.AddComponent<CanvasGroup>();
             nightTeaserCanvasGroup.alpha = 0f;
 
-            TMP_Text teaserTitleText = CreateTMPText(nightTeaserPanel.transform, "TeaserTitleText", "--  NIGHT ONE  ·  ESMERALDA  --", font, 22f, FontStyles.Bold | FontStyles.UpperCase, TextAlignmentOptions.Center, HanUITheme.SubduedBrass);
+            TMP_Text teaserTitleText = CreateTMPText(nightTeaserPanel.transform, "TeaserTitleText", "--  NIGHT ONE  ·  ANCUTZA  --", font, 22f, FontStyles.Bold | FontStyles.UpperCase, TextAlignmentOptions.Center, HanUITheme.SubduedBrass);
             SetRect(teaserTitleText.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 128f), new Vector2(980f, 38f));
 
             CreateOrnamentalDivider(nightTeaserPanel.transform, "TeaserTopDivider", new Vector2(0.5f, 0.5f), new Vector2(0f, 96f), new Vector2(540f, 8f), 0.75f);
@@ -214,25 +214,25 @@ namespace Han.CheckIn.Editor
                 new Vector2(0.5f, 0.5f),
                 new Vector2(0.5f, 0.5f),
                 Vector2.zero,
-                new Vector2(600f, 620f),
+                new Vector2(620f, 650f),
                 HanUITheme.CharcoalSurface);
 
             TMP_Text settingsTitle = CreateTMPText(settingsCard.transform, "SettingsTitle", "LEDGER SETTINGS", font, 34f, FontStyles.Bold, TextAlignmentOptions.Center, HanUITheme.WarmParchment);
-            SetRect(settingsTitle.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -38f), new Vector2(480f, 46f));
+            SetRect(settingsTitle.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -38f), new Vector2(520f, 46f));
 
             CreateOrnamentalDivider(settingsCard.transform, "SettingsDivider", new Vector2(0.5f, 1f), new Vector2(0f, -92f), new Vector2(460f, 8f), 0.8f);
 
-            Slider masterVolSlider = CreateArchivalSliderRow(settingsCard.transform, "MasterVolumeRow", "MASTER AUDIO VOLUME", font, new Vector2(0f, 142f), 0f, 1f, 0.85f);
-            Slider lookSensSlider = CreateArchivalSliderRow(settingsCard.transform, "LookSensitivityRow", "CAMERA LOOK SENSITIVITY", font, new Vector2(0f, 82f), 4f, 45f, 20f);
-            Toggle doorHighlightToggle = CreateArchivalToggleRow(settingsCard.transform, "DoorHighlightRow", "INTERACTION OUTLINE HIGHLIGHTS", font, new Vector2(0f, 22f), true);
-            Toggle lowEndModeToggle = CreateArchivalToggleRow(settingsCard.transform, "LowEndModeRow", "LOW-END PC MODE (LOW RAM / NO GPU) [F8]", font, new Vector2(0f, -36f), false);
+            Slider masterVolSlider = CreateArchivalSliderRow(settingsCard.transform, "MasterVolumeRow", "MASTER AUDIO VOLUME", font, new Vector2(0f, 154f), 0f, 1f, 0.85f);
+            Slider lookSensSlider = CreateArchivalSliderRow(settingsCard.transform, "LookSensitivityRow", "CAMERA LOOK SENSITIVITY", font, new Vector2(0f, 94f), 4f, 45f, 20f);
+            Toggle doorHighlightToggle = CreateArchivalToggleRow(settingsCard.transform, "DoorHighlightRow", "INTERACTION OUTLINE HIGHLIGHTS", font, new Vector2(0f, 34f), true);
+            Toggle lowEndModeToggle = CreateArchivalToggleRow(settingsCard.transform, "LowEndModeRow", "LOW-END PC MODE (LOW RAM / NO GPU) [F8]", font, new Vector2(0f, -26f), false);
 
-            Button settingsLanguageButton = CreateTactilePlateButton(settingsCard.transform, "SettingsLanguageButton", HanLocalization.Get("ui.language_button"), font, new Vector2(0f, -102f), new Vector2(340f, 44f), isPrimary: false);
+            HanSettingsLanguageRow.EnsureOrCreate(settingsCard.transform, font, new Vector2(0f, -86f), new Vector2(510f, 50f));
 
             TMP_Text controlsHint = CreateTMPText(settingsCard.transform, "ControlsHint", "[ESC] Pause  |  [TAB] Guest Book  |  [F8] Low-End PC Mode  |  [F6] End Night", font, 14f, FontStyles.Italic, TextAlignmentOptions.Center, HanUITheme.AgedPaper);
-            SetRect(controlsHint.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 118f), new Vector2(540f, 26f));
+            SetRect(controlsHint.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 114f), new Vector2(540f, 42f));
 
-            Button settingsBackButton = CreateTactilePlateButton(settingsCard.transform, "SettingsBackButton", "RETURN", font, new Vector2(0f, -252f), new Vector2(280f, 54f), isPrimary: true);
+            Button settingsBackButton = CreateTactilePlateButton(settingsCard.transform, "SettingsBackButton", "RETURN", font, new Vector2(0f, -258f), new Vector2(300f, 54f), isPrimary: true);
             settingsPanel.SetActive(false);
 
             // --- H. Credits Modal Sub-Panel ---
@@ -318,7 +318,7 @@ namespace Han.CheckIn.Editor
             so.FindProperty("settingsCanvasGroup").objectReferenceValue = settingsCanvasGroup;
             so.FindProperty("settingsCardRect").objectReferenceValue = settingsCard.GetComponent<RectTransform>();
             so.FindProperty("settingsBackButton").objectReferenceValue = settingsBackButton;
-            so.FindProperty("settingsLanguageButton").objectReferenceValue = settingsLanguageButton;
+            so.FindProperty("settingsLanguageButton").objectReferenceValue = null;
             so.FindProperty("masterVolumeSlider").objectReferenceValue = masterVolSlider;
             so.FindProperty("lookSensitivitySlider").objectReferenceValue = lookSensSlider;
             so.FindProperty("doorHighlightToggle").objectReferenceValue = doorHighlightToggle;
@@ -691,7 +691,7 @@ namespace Han.CheckIn.Editor
             GameObject rowObj = new GameObject(name);
             rowObj.transform.SetParent(parent, false);
             RectTransform rowRt = rowObj.AddComponent<RectTransform>();
-            SetRect(rowRt, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), anchoredPos, new Vector2(480f, 54f));
+            SetRect(rowRt, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), anchoredPos, new Vector2(510f, 54f));
 
             TMP_Text lbl = CreateTMPText(rowObj.transform, "Label", label, font, 16f, FontStyles.Bold, TextAlignmentOptions.MidlineLeft, HanUITheme.AgedPaper);
             SetRect(lbl.rectTransform, new Vector2(0f, 0.5f), new Vector2(0.55f, 0.5f), new Vector2(0f, 0.5f), Vector2.zero, new Vector2(0f, 40f));
@@ -754,7 +754,7 @@ namespace Han.CheckIn.Editor
             GameObject rowObj = new GameObject(name);
             rowObj.transform.SetParent(parent, false);
             RectTransform rowRt = rowObj.AddComponent<RectTransform>();
-            SetRect(rowRt, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), anchoredPos, new Vector2(480f, 50f));
+            SetRect(rowRt, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), anchoredPos, new Vector2(510f, 50f));
 
             TMP_Text lbl = CreateTMPText(rowObj.transform, "Label", label, font, 16f, FontStyles.Bold, TextAlignmentOptions.MidlineLeft, HanUITheme.AgedPaper);
             SetRect(lbl.rectTransform, new Vector2(0f, 0.5f), new Vector2(0.82f, 0.5f), new Vector2(0f, 0.5f), Vector2.zero, new Vector2(0f, 40f));
@@ -799,6 +799,112 @@ namespace Han.CheckIn.Editor
             rt.pivot = pivot;
             rt.anchoredPosition = anchoredPos;
             rt.sizeDelta = sizeDelta;
+        }
+
+        [MenuItem("Han/Integrate Language Row into Settings Canvas")]
+        public static void IntegrateLanguageRowMenu()
+        {
+            IntegrateLanguageRowIntoActiveScene(autoSaveIfClean: false);
+        }
+
+        internal static bool IntegrateLanguageRowIntoActiveScene(bool autoSaveIfClean)
+        {
+            GameObject cardObj = null;
+            GameLoopManager glm = Object.FindFirstObjectByType<GameLoopManager>(FindObjectsInactive.Include);
+            if (glm != null)
+            {
+                SerializedObject glmSo = new SerializedObject(glm);
+                RectTransform cardRef = glmSo.FindProperty("settingsCardRect")?.objectReferenceValue as RectTransform;
+                if (cardRef != null) cardObj = cardRef.gameObject;
+            }
+
+            if (cardObj == null)
+            {
+                RectTransform[] allRects = Resources.FindObjectsOfTypeAll<RectTransform>();
+                for (int i = 0; i < allRects.Length; i++)
+                {
+                    RectTransform rt = allRects[i];
+                    if (rt != null && rt.name == "SettingsModalCard" && !EditorUtility.IsPersistent(rt) && rt.gameObject.scene.IsValid())
+                    {
+                        cardObj = rt.gameObject;
+                        break;
+                    }
+                }
+            }
+
+            if (cardObj == null)
+            {
+                if (!autoSaveIfClean)
+                    Debug.LogWarning("[HanGameLoopSetupEditor] Could not find SettingsModalCard in active scene.");
+                return false;
+            }
+
+            bool wasDirty = cardObj.scene.isDirty;
+            RectTransform cardRt = cardObj.GetComponent<RectTransform>();
+            if (cardRt != null)
+            {
+                cardRt.sizeDelta = new Vector2(620f, 650f);
+            }
+
+            SetChildRect(cardObj.transform, "MasterVolumeRow", new Vector2(0f, 154f), new Vector2(510f, 54f));
+            SetChildRect(cardObj.transform, "LookSensitivityRow", new Vector2(0f, 94f), new Vector2(510f, 54f));
+            SetChildRect(cardObj.transform, "DoorHighlightRow", new Vector2(0f, 34f), new Vector2(510f, 50f));
+            SetChildRect(cardObj.transform, "LowEndModeRow", new Vector2(0f, -26f), new Vector2(510f, 50f));
+            SetChildRect(cardObj.transform, "ControlsHint", new Vector2(0f, 114f), new Vector2(540f, 42f));
+            SetChildRect(cardObj.transform, "SettingsBackButton", new Vector2(0f, -258f), new Vector2(300f, 54f));
+
+            HanSettingsLanguageRow row = HanSettingsLanguageRow.EnsureOrCreate(
+                cardObj.transform,
+                HanUITheme.GetProjectFont(),
+                new Vector2(0f, -86f),
+                new Vector2(510f, 50f));
+
+            Transform legacyBtn = cardObj.transform.Find("SettingsLanguageButton");
+            if (legacyBtn != null)
+            {
+                Object.DestroyImmediate(legacyBtn.gameObject);
+            }
+
+            EditorUtility.SetDirty(cardObj);
+            EditorSceneManager.MarkSceneDirty(cardObj.scene);
+            if (autoSaveIfClean && !wasDirty && !string.IsNullOrEmpty(cardObj.scene.path))
+            {
+                EditorSceneManager.SaveScene(cardObj.scene);
+            }
+
+            return row != null;
+        }
+
+        private static void SetChildRect(Transform parent, string name, Vector2 pos, Vector2 size)
+        {
+            if (parent.Find(name) is RectTransform rt)
+            {
+                rt.anchoredPosition = pos;
+                rt.sizeDelta = size;
+            }
+        }
+    }
+
+    [InitializeOnLoad]
+    internal static class HanSettingsLanguageSceneIntegrator
+    {
+        private const string PrefKey = "Han_SettingsLangRowIntegrated_v1";
+
+        static HanSettingsLanguageSceneIntegrator()
+        {
+            if (EditorPrefs.GetBool(PrefKey, false))
+                return;
+
+            EditorApplication.delayCall += () =>
+            {
+                if (EditorApplication.isPlayingOrWillChangePlaymode)
+                    return;
+
+                if (HanGameLoopSetupEditor.IntegrateLanguageRowIntoActiveScene(autoSaveIfClean: true))
+                {
+                    EditorPrefs.SetBool(PrefKey, true);
+                }
+            };
         }
     }
 }

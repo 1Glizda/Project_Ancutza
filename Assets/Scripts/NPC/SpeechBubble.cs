@@ -237,8 +237,8 @@ public class SpeechBubble : MonoBehaviour
         RectTransform textRect = textObj.GetComponent<RectTransform>();
         textRect.anchorMin = Vector2.zero;
         textRect.anchorMax = Vector2.one;
-        textRect.offsetMin = new Vector2(16f, 10f);
-        textRect.offsetMax = new Vector2(-16f, -28f);
+        textRect.offsetMin = new Vector2(18f, 12f);
+        textRect.offsetMax = new Vector2(-18f, -30f);
 
         // 5. Tactile "Go on" Stamp-Plate Prompt Button Positioned Directly Below Dialogue Card
         _goOnButtonObj = new GameObject("GoOnButton");
@@ -265,9 +265,9 @@ public class SpeechBubble : MonoBehaviour
         _goOnButtonRect.anchorMin = new Vector2(0.5f, 0f);
         _goOnButtonRect.anchorMax = new Vector2(0.5f, 0f);
         _goOnButtonRect.pivot = new Vector2(0.5f, 0f);
-        _goOnBaseAnchoredPos = new Vector2(0f, 2f);
+        _goOnBaseAnchoredPos = new Vector2(0f, 3f);
         _goOnButtonRect.anchoredPosition = _goOnBaseAnchoredPos;
-        _goOnButtonRect.sizeDelta = new Vector2(176f, 36f);
+        _goOnButtonRect.sizeDelta = new Vector2(190f, 38f);
 
         // Left Brass Index Tab on "Go on" Button
         GameObject leftTabObj = new GameObject("LeftBrassTab");
@@ -625,7 +625,7 @@ public class SpeechBubble : MonoBehaviour
         if (!string.IsNullOrWhiteSpace(speakerOverride))
         {
             _headerText.text = $"[ {speakerOverride.Trim().ToUpperInvariant()} ]";
-            _headerText.color = string.Equals(speakerOverride.Trim(), "ESMERALDA", StringComparison.OrdinalIgnoreCase)
+            _headerText.color = string.Equals(speakerOverride.Trim(), "ANCUTZA", StringComparison.OrdinalIgnoreCase)
                 ? HanUITheme.BurnishedGold
                 : HanUITheme.SubduedBrass;
             return;

@@ -115,6 +115,11 @@ namespace Han.CheckIn
                 "MOD PC SLAB (RAM MIC / FĂRĂ GPU) [F8]",
                 "ALACSONY GÉPIGÉNYŰ MÓD [F8]");
 
+            Add("settings.language",
+                "LANGUAGE",
+                "LIMBĂ",
+                "NYELV");
+
             Add("settings.controls_hint",
                 "[ESC] Pause  |  [TAB] Guest Book  |  [F8] Low-End PC Mode  |  [F6] End Night",
                 "[ESC] Răgaz  |  [TAB] Condică  |  [F8] Mod PC Slab  |  [F6] Încheie noaptea",

@@ -288,6 +288,15 @@ MonoBehaviour:
   photoSlapSound: {fileID: 0}
   stampThudSound: {fileID: 0}
   shutterFlashSound: {fileID: 0}
+  charsPerSoundTick: 2
+  minTickSoundInterval: 0.024
+  baseNameCharInterval: 0.024
+  baseMetaCharInterval: 0.019
+  baseNotesCharInterval: 0.013
+  punctuationCadenceMultiplier: 2.1
+  soundPitchMin: 0.92
+  soundPitchMax: 1.14
+  soundVolume: 0.38
   guestRegistry:
   - guestName: Florin din Vatra
     portrait: {fileID: 21300000, guid: 56674e7caff1d4f649736f1212d04f4c, type: 3}
@@ -307,11 +316,30 @@ MonoBehaviour:
       Calul s\u0103u murg trebuie \u021Binut \xEEn grajdul de r\u0103s\u0103rit.
       Miros u\u0219or de t\u0103m\xE2ie \u0219i p\u0103m\xE2nt reav\u0103n."
     signatureStamp: {fileID: 0}
+    archetype: 0
+    checkInRejectedLine: 
+    checkInDialogueSteps: []
     role: 0
+    monsterType: 0
     staysNights: 1
     nightsStayed: 0
     arrivedOnNight: 1
     isAlive: 1
+    defaultSampleId: 0
+    arrivalTimeKey: 
+    neutralNoteKey: 
+    clueNoteKey: 
+    horseNoteKey: 
+    isDeceasedInBook: 0
+    deceasedRoomNumber: 0
+    investigationSetIndex: -1
+    investigationAnswerIndex: -1
+    acceptReactionIndex: -1
+    rejectReactionIndex: -1
+    roadAnswerIndex: -1
+    identityAnswerIndex: -1
+    usesGeneratedFallbackName: 0
+    generatedFallbackNumber: 0
   - guestName: "Gheorghe Str\u0103inul"
     portrait: {fileID: 21300000, guid: 711a0d28071b41bfa11cc1900696b607, type: 3}
     personality: 2
@@ -330,11 +358,30 @@ MonoBehaviour:
       lupilor. Evit\u0103 oglinzile din han \u0219i poart\u0103 un medalion ruginit
       din argint."
     signatureStamp: {fileID: 0}
+    archetype: 0
+    checkInRejectedLine: 
+    checkInDialogueSteps: []
     role: 0
+    monsterType: 0
     staysNights: 1
     nightsStayed: 0
     arrivedOnNight: 1
     isAlive: 1
+    defaultSampleId: 0
+    arrivalTimeKey: 
+    neutralNoteKey: 
+    clueNoteKey: 
+    horseNoteKey: 
+    isDeceasedInBook: 0
+    deceasedRoomNumber: 0
+    investigationSetIndex: -1
+    investigationAnswerIndex: -1
+    acceptReactionIndex: -1
+    rejectReactionIndex: -1
+    roadAnswerIndex: -1
+    identityAnswerIndex: -1
+    usesGeneratedFallbackName: 0
+    generatedFallbackNumber: 0
   - guestName: Doamna Ilinca
     portrait: {fileID: 21300000, guid: 711a0d28071b41bfa11cc1900696b607, type: 3}
     personality: 2
@@ -353,11 +400,30 @@ MonoBehaviour:
       s\u0103-\u0219i ridice v\u0103lul negru de doliu. A cerut crengi de scoru\u0219
       \u0219i sare la pragul od\u0103ii."
     signatureStamp: {fileID: 0}
+    archetype: 0
+    checkInRejectedLine: 
+    checkInDialogueSteps: []
     role: 0
+    monsterType: 0
     staysNights: 1
     nightsStayed: 0
     arrivedOnNight: 1
     isAlive: 1
+    defaultSampleId: 0
+    arrivalTimeKey: 
+    neutralNoteKey: 
+    clueNoteKey: 
+    horseNoteKey: 
+    isDeceasedInBook: 0
+    deceasedRoomNumber: 0
+    investigationSetIndex: -1
+    investigationAnswerIndex: -1
+    acceptReactionIndex: -1
+    rejectReactionIndex: -1
+    roadAnswerIndex: -1
+    identityAnswerIndex: -1
+    usesGeneratedFallbackName: 0
+    generatedFallbackNumber: 0
   currentPageIndex: 0
   suppressDefaultGuests: 0
 --- !u!1 &216482231577361594

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no">
+    <title>{{{ PRODUCT_NAME }}}</title>
+    <link rel="shortcut icon" href="TemplateData/favicon.ico">
+    <link rel="stylesheet" href="TemplateData/style.css">
+  </head>
+  <body>
+    <div id="unity-container">
+      <div id="unity-stage">
+        <canvas id="unity-canvas" tabindex="-1"></canvas>
+        <div id="unity-loading-bar">
+          <div id="han-loading-title">{{{ PRODUCT_NAME }}}</div>
+          <div id="han-loading-subtitle">1648  ·  Walachian Forest Inn</div>
+          <div id="unity-progress-bar-empty">
+            <div id="unity-progress-bar-full"></div>
+          </div>
+        </div>
+      </div>
+      <div id="unity-warning"></div>
+      <div id="unity-footer">
+        <div id="unity-build-title">{{{ PRODUCT_NAME }}}</div>
+        <button id="unity-fullscreen-button" type="button" title="Toggle Fullscreen">
+          <img src="TemplateData/fullscreen-button.png" alt="Fullscreen">
+          <span>Fullscreen</span>
+        </button>
+      </div>
+    </div>
+    <script>
+      (function () {
+        var container = document.getElementById("unity-container");
+        var canvas = document.getElementById("unity-canvas");
+        var loadingBar = document.getElementById("unity-loading-bar");
+        var progressBarFull = document.getElementById("unity-progress-bar-full");
+        var fullscreenButton = document.getElementById("unity-fullscreen-button");
+        var warningBanner = document.getElementById("unity-warning");
+
+        function unityShowBanner(msg, type) {
+          function updateBannerVisibility() {
+            warningBanner.style.display = warningBanner.children.length ? "block" : "none";
+          }
+          var div = document.createElement("div");
+          div.innerHTML = msg;
+          warningBanner.appendChild(div);
+          if (type === "error") {
+            div.style = "background: #6f1f18; color: #f4ead2; border: 1px solid #e6c17a; padding: 10px 16px; font-size: 13px;";
+          } else {
+            if (type === "warning") {
+              div.style = "background: #3d2c19; color: #f4ead2; border: 1px solid #be9456; padding: 8px 14px; font-size: 12px;";
+            }
+            setTimeout(function () {
+              if (div.parentNode === warningBanner) {
+                warningBanner.removeChild(div);
+                updateBannerVisibility();
+              }
+            }, 5000);
+          }
+          updateBannerVisibility();
+        }
+
+        function syncCanvasFill() {
+          var isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+          if (isFs) {
+            canvas.style.width = "100vw";
+            canvas.style.height = "100vh";
+          } else {
+            canvas.style.width = "100%";
+            canvas.style.height = "100%";
+          }
+          window.requestAnimationFrame(function () {
+            window.dispatchEvent(new Event("resize"));
+          });
+        }
+
+        document.addEventListener("fullscreenchange", syncCanvasFill);
+        document.addEventListener("webkitfullscreenchange", syncCanvasFill);
+        window.addEventListener("resize", syncCanvasFill);
+
+        var buildUrl = "Build";
+        var loaderUrl = buildUrl + "/{{{ LOADER_FILENAME }}}";
+        var config = {
+          arguments: [],
+          dataUrl: buildUrl + "/{{{ DATA_FILENAME }}}",
+          frameworkUrl: buildUrl + "/{{{ FRAMEWORK_FILENAME }}}",
+          codeUrl: buildUrl + "/{{{ CODE_FILENAME }}}",
+#if MEMORY_FILENAME
+          memoryUrl: buildUrl + "/{{{ MEMORY_FILENAME }}}",
+#endif
+#if SYMBOLS_FILENAME
+          symbolsUrl: buildUrl + "/{{{ SYMBOLS_FILENAME }}}",
+#endif
+          streamingAssetsUrl: "StreamingAssets",
+          companyName: {{{ JSON.stringify(COMPANY_NAME) }}},
+          productName: {{{ JSON.stringify(PRODUCT_NAME) }}},
+          productVersion: {{{ JSON.stringify(PRODUCT_VERSION) }}},
+          showBanner: unityShowBanner,
+          matchWebGLToCanvasSize: true,
+          devicePixelRatio: Math.min(window.devicePixelRatio || 1, 2)
+        };
+
+        loadingBar.style.display = "flex";
+        syncCanvasFill();
+
+        var script = document.createElement("script");
+        script.src = loaderUrl;
+        script.onload = function () {
+          createUnityInstance(canvas, config, function (progress) {
+            progressBarFull.style.width = (100 * progress) + "%";
+          }).then(function (unityInstance) {
+            loadingBar.style.display = "none";
+            syncCanvasFill();
+
+            fullscreenButton.addEventListener("click", function () {
+              var isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+              if (!isFs) {
+                if (container.requestFullscreen) {
+                  container.requestFullscreen().catch(function () {
+                    unityInstance.SetFullscreen(1);
+                  });
+                } else if (container.webkitRequestFullscreen) {
+                  container.webkitRequestFullscreen();
+                } else {
+                  unityInstance.SetFullscreen(1);
+                }
+              } else {
+                if (document.exitFullscreen) {
+                  document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                  document.webkitExitFullscreen();
+                }
+              }
+            });
+          }).catch(function (message) {
+            alert(message);
+          });
+        };
+        document.body.appendChild(script);
+      })();
+    </script>
+  </body>
+</html>

@@ -1,4 +1,6 @@
+using System;
 using UnityEngine;
+using UnityEngine.UI;
 using TMPro;
 
 namespace Han.CheckIn
@@ -81,6 +83,24 @@ namespace Han.CheckIn
         private static Sprite _vignetteGrainSprite;
         private static Sprite _dividerOrnamentSprite;
         private static TMP_FontAsset _cachedFont;
+        private static Texture2D _imguiCardTex;
+        private static Texture2D _imguiPillTex;
+        private static Texture2D _imguiButtonNormTex;
+        private static Texture2D _imguiButtonHoverTex;
+        private static Texture2D _imguiButtonActiveTex;
+        private static Texture2D _imguiCrimsonNormTex;
+        private static Texture2D _imguiCrimsonHoverTex;
+
+        /// <summary>
+        /// Computes the exact scale factor used by 1920x1080 ScreenSpaceOverlay CanvasScalers
+        /// with matchWidthOrHeight = 0.5f so IMGUI overlays scale identically with uGUI in WebGL & fullscreen.
+        /// </summary>
+        public static float GetMatchedReferenceScale()
+        {
+            float wRatio = Mathf.Max(0.25f, Screen.width / 1920f);
+            float hRatio = Mathf.Max(0.25f, Screen.height / 1080f);
+            return Mathf.Pow(wRatio, 0.5f) * Mathf.Pow(hRatio, 0.5f);
+        }
 
         /// <summary>
         /// Resolves the project's primary TextMeshPro SDF font asset.
@@ -396,6 +416,446 @@ namespace Han.CheckIn
             tex.Apply(false, !Application.isEditor);
             _dividerOrnamentSprite = Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f), 100f);
             return _dividerOrnamentSprite;
+        }
+
+        // ------------------------------------------------------------------
+        //  Cached Archival IMGUI Textures (9-sliced via GUIStyle.border = 8)
+        // ------------------------------------------------------------------
+        public static Texture2D GetImGuiCardTexture()
+        {
+            if (_imguiCardTex == null)
+            {
+                _imguiCardTex = BuildImGuiPlateTexture(
+                    DeepSepiaInk,
+                    new Color(SubduedBrass.r, SubduedBrass.g, SubduedBrass.b, 0.90f),
+                    new Color(SubduedBrass.r, SubduedBrass.g, SubduedBrass.b, 0.25f),
+                    0,
+                    Color.clear);
+            }
+            return _imguiCardTex;
+        }
+
+        public static Texture2D GetImGuiPillTexture()
+        {
+            if (_imguiPillTex == null)
+            {
+                _imguiPillTex = BuildImGuiPlateTexture(
+                    new Color(0.086f, 0.068f, 0.055f, 0.88f),
+                    new Color(SubduedBrass.r, SubduedBrass.g, SubduedBrass.b, 0.62f),
+                    Color.clear,
+                    3,
+                    new Color(SubduedBrass.r, SubduedBrass.g, SubduedBrass.b, 0.95f));
+            }
+            return _imguiPillTex;
+        }
+
+        public static Texture2D GetImGuiButtonTexture(bool hovered, bool pressed, bool primaryCrimson)
+        {
+            if (primaryCrimson)
+            {
+                if (hovered || pressed)
+                {
+                    if (_imguiCrimsonHoverTex == null)
+                    {
+                        _imguiCrimsonHoverTex = BuildImGuiPlateTexture(
+                            pressed ? PressedCrimson : new Color(0.62f, 0.20f, 0.15f, 0.98f),
+                            BurnishedGold,
+                            Color.clear,
+                            5,
+                            BurnishedGold);
+                    }
+                    return _imguiCrimsonHoverTex;
+                }
+                if (_imguiCrimsonNormTex == null)
+                {
+                    _imguiCrimsonNormTex = BuildImGuiPlateTexture(
+                        StampCrimson,
+                        new Color(SubduedBrass.r, SubduedBrass.g, SubduedBrass.b, 0.85f),
+                        Color.clear,
+                        5,
+                        BurnishedGold);
+                }
+                return _imguiCrimsonNormTex;
+            }
+
+            if (pressed)
+            {
+                if (_imguiButtonActiveTex == null)
+                {
+                    _imguiButtonActiveTex = BuildImGuiPlateTexture(
+                        PressedCrimson,
+                        BurnishedGold,
+                        Color.clear,
+                        5,
+                        BurnishedGold);
+                }
+                return _imguiButtonActiveTex;
+            }
+
+            if (hovered)
+            {
+                if (_imguiButtonHoverTex == null)
+                {
+                    _imguiButtonHoverTex = BuildImGuiPlateTexture(
+                        HoveredSlatePlate,
+                        BurnishedGold,
+                        Color.clear,
+                        5,
+                        BurnishedGold);
+                }
+                return _imguiButtonHoverTex;
+            }
+
+            if (_imguiButtonNormTex == null)
+            {
+                _imguiButtonNormTex = BuildImGuiPlateTexture(
+                    CharcoalSurface,
+                    new Color(SubduedBrass.r, SubduedBrass.g, SubduedBrass.b, 0.72f),
+                    Color.clear,
+                    5,
+                    SubduedBrass);
+            }
+            return _imguiButtonNormTex;
+        }
+
+        private static Texture2D BuildImGuiPlateTexture(
+            Color fill,
+            Color outerBorder,
+            Color innerRule,
+            int leftTabWidth,
+            Color leftTabColor)
+        {
+            const int size = 32;
+            Texture2D tex = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                filterMode = FilterMode.Point,
+                wrapMode = TextureWrapMode.Clamp,
+                hideFlags = HideFlags.HideAndDontSave
+            };
+
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    bool isOuter = x == 0 || x == size - 1 || y == 0 || y == size - 1;
+                    bool isInner = innerRule.a > 0.01f &&
+                                   (x == 4 || x == size - 5 || y == 4 || y == size - 5) &&
+                                   x >= 4 && x <= size - 5 && y >= 4 && y <= size - 5;
+                    bool isLeftTab = leftTabWidth > 0 && x >= 1 && x <= leftTabWidth && y >= 1 && y <= size - 2;
+
+                    Color px = fill;
+                    if (isLeftTab)
+                        px = leftTabColor;
+                    else if (isOuter)
+                        px = outerBorder;
+                    else if (isInner)
+                        px = innerRule;
+
+                    tex.SetPixel(x, y, px);
+                }
+            }
+
+            tex.Apply(false, false);
+            return tex;
+        }
+    }
+
+    /// <summary>
+    /// Archival 3-language segmented row (EN | RO | HU) integrated inside SettingsModalCard
+    /// matching the geometry and visual grammar of MasterVolumeRow / DoorHighlightRow.
+    /// </summary>
+    public class HanSettingsLanguageRow : MonoBehaviour
+    {
+        public const string RowObjectName = "LanguageRow";
+
+        [SerializeField] private TMP_Text rowLabel;
+        [SerializeField] private Button englishButton;
+        [SerializeField] private Button romanianButton;
+        [SerializeField] private Button hungarianButton;
+
+        public Action OnLanguagePicked;
+
+        private bool _listenersBound;
+
+        private void Awake()
+        {
+            BindSegmentButtons();
+        }
+
+        private void OnEnable()
+        {
+            BindSegmentButtons();
+            HanLocalization.OnLanguageChanged -= HandleLanguageChanged;
+            HanLocalization.OnLanguageChanged += HandleLanguageChanged;
+            RefreshVisuals();
+        }
+
+        private void OnDisable()
+        {
+            HanLocalization.OnLanguageChanged -= HandleLanguageChanged;
+        }
+
+        private void HandleLanguageChanged(HanLanguage _)
+        {
+            RefreshVisuals();
+        }
+
+        public void BindSegmentButtons()
+        {
+            ResolveReferences();
+            if (_listenersBound) return;
+            _listenersBound = true;
+
+            if (englishButton != null)
+                englishButton.onClick.AddListener(() => SelectLanguage(HanLanguage.English));
+            if (romanianButton != null)
+                romanianButton.onClick.AddListener(() => SelectLanguage(HanLanguage.Romanian));
+            if (hungarianButton != null)
+                hungarianButton.onClick.AddListener(() => SelectLanguage(HanLanguage.Hungarian));
+        }
+
+        private void SelectLanguage(HanLanguage lang)
+        {
+            OnLanguagePicked?.Invoke();
+            if (HanLocalization.CurrentLanguage != lang)
+            {
+                HanLocalization.SetLanguage(lang);
+            }
+            else
+            {
+                RefreshVisuals();
+            }
+        }
+
+        public void RefreshVisuals()
+        {
+            ResolveReferences();
+
+            if (rowLabel != null)
+            {
+                rowLabel.text = HanLocalization.Get("settings.language");
+                HanUITheme.ApplyCrispSDF(rowLabel, HanUITheme.GetProjectFont());
+            }
+
+            HanLanguage current = HanLocalization.CurrentLanguage;
+            ApplySegmentVisual(englishButton, current == HanLanguage.English);
+            ApplySegmentVisual(romanianButton, current == HanLanguage.Romanian);
+            ApplySegmentVisual(hungarianButton, current == HanLanguage.Hungarian);
+        }
+
+        private void ResolveReferences()
+        {
+            if (rowLabel == null)
+                rowLabel = transform.Find("Label")?.GetComponent<TMP_Text>();
+            if (englishButton == null)
+                englishButton = transform.Find("SegmentTrack/LangBtn_EN")?.GetComponent<Button>();
+            if (romanianButton == null)
+                romanianButton = transform.Find("SegmentTrack/LangBtn_RO")?.GetComponent<Button>();
+            if (hungarianButton == null)
+                hungarianButton = transform.Find("SegmentTrack/LangBtn_HU")?.GetComponent<Button>();
+        }
+
+        private static void ApplySegmentVisual(Button btn, bool active)
+        {
+            if (btn == null) return;
+
+            Image plate = btn.GetComponent<Image>();
+            if (plate != null)
+            {
+                plate.color = active ? HanUITheme.StampCrimson : HanUITheme.CharcoalSurface;
+            }
+
+            Outline outline = btn.GetComponent<Outline>();
+            if (outline != null)
+            {
+                outline.effectColor = active
+                    ? HanUITheme.BurnishedGold
+                    : new Color(HanUITheme.SubduedBrass.r, HanUITheme.SubduedBrass.g, HanUITheme.SubduedBrass.b, 0.25f);
+            }
+
+            Transform barTr = btn.transform.Find("ActiveBar");
+            if (barTr != null)
+                barTr.gameObject.SetActive(active);
+
+            TMP_Text txt = btn.GetComponentInChildren<TMP_Text>(true);
+            if (txt != null)
+            {
+                txt.color = active ? HanUITheme.WarmParchment : HanUITheme.AgedPaper;
+                txt.fontStyle = active ? FontStyles.Bold : FontStyles.Normal;
+            }
+
+            ColorBlock cb = btn.colors;
+            cb.normalColor = Color.white;
+            cb.highlightedColor = active ? new Color(1.08f, 1.05f, 1.0f, 1f) : new Color(1.28f, 1.18f, 1.05f, 1f);
+            cb.pressedColor = new Color(0.85f, 0.80f, 0.74f, 1f);
+            cb.selectedColor = cb.highlightedColor;
+            cb.colorMultiplier = 1f;
+            cb.fadeDuration = 0.08f;
+            btn.colors = cb;
+        }
+
+        /// <summary>
+        /// Ensures an archival LanguageRow exists directly inside the given SettingsModalCard.
+        /// Safe to call in both Edit Mode and Runtime Play Mode.
+        /// </summary>
+        public static HanSettingsLanguageRow EnsureOrCreate(
+            Transform settingsCard,
+            TMP_FontAsset font = null,
+            Vector2? anchoredPos = null,
+            Vector2? rowSize = null)
+        {
+            if (settingsCard == null) return null;
+
+            font = font != null ? font : HanUITheme.GetProjectFont();
+            Vector2 pos = anchoredPos ?? new Vector2(0f, -86f);
+            Vector2 size = rowSize ?? new Vector2(510f, 50f);
+
+            // Hide any legacy standalone SettingsLanguageButton if present
+            Transform legacyBtn = settingsCard.Find("SettingsLanguageButton");
+            if (legacyBtn != null && legacyBtn.gameObject.activeSelf)
+            {
+                legacyBtn.gameObject.SetActive(false);
+            }
+
+            Transform existingTr = settingsCard.Find(RowObjectName);
+            GameObject rowObj;
+            if (existingTr != null)
+            {
+                rowObj = existingTr.gameObject;
+                if (rowObj.transform is RectTransform existingRt)
+                {
+                    existingRt.anchoredPosition = pos;
+                    existingRt.sizeDelta = size;
+                }
+                HanSettingsLanguageRow existingComp = rowObj.GetComponent<HanSettingsLanguageRow>();
+                if (existingComp == null) existingComp = rowObj.AddComponent<HanSettingsLanguageRow>();
+                existingComp.RefreshVisuals();
+                return existingComp;
+            }
+
+            rowObj = new GameObject(RowObjectName, typeof(RectTransform));
+            rowObj.transform.SetParent(settingsCard, false);
+            RectTransform rowRt = rowObj.GetComponent<RectTransform>();
+            rowRt.anchorMin = new Vector2(0.5f, 0.5f);
+            rowRt.anchorMax = new Vector2(0.5f, 0.5f);
+            rowRt.pivot = new Vector2(0.5f, 0.5f);
+            rowRt.anchoredPosition = pos;
+            rowRt.sizeDelta = size;
+
+            // Left Label matching MasterVolumeRow / DoorHighlightRow
+            GameObject lblObj = new GameObject("Label", typeof(RectTransform));
+            lblObj.transform.SetParent(rowObj.transform, false);
+            RectTransform lblRt = lblObj.GetComponent<RectTransform>();
+            lblRt.anchorMin = new Vector2(0f, 0.5f);
+            lblRt.anchorMax = new Vector2(0.54f, 0.5f);
+            lblRt.pivot = new Vector2(0f, 0.5f);
+            lblRt.anchoredPosition = Vector2.zero;
+            lblRt.sizeDelta = new Vector2(0f, 40f);
+
+            TMP_Text lbl = lblObj.AddComponent<TextMeshProUGUI>();
+            HanUITheme.ApplyCrispSDF(lbl, font);
+            lbl.text = HanLocalization.Get("settings.language");
+            lbl.fontSize = 16f;
+            lbl.enableAutoSizing = true;
+            lbl.fontSizeMin = 11f;
+            lbl.fontSizeMax = 16f;
+            lbl.fontStyle = FontStyles.Bold;
+            lbl.alignment = TextAlignmentOptions.MidlineLeft;
+            lbl.color = HanUITheme.AgedPaper;
+            lbl.raycastTarget = false;
+
+            // Right Segmented Track Container
+            GameObject trackObj = new GameObject("SegmentTrack", typeof(RectTransform), typeof(Image), typeof(Outline), typeof(HorizontalLayoutGroup));
+            trackObj.transform.SetParent(rowObj.transform, false);
+            RectTransform trackRt = trackObj.GetComponent<RectTransform>();
+            trackRt.anchorMin = new Vector2(0.56f, 0.5f);
+            trackRt.anchorMax = new Vector2(1f, 0.5f);
+            trackRt.pivot = new Vector2(0.5f, 0.5f);
+            trackRt.anchoredPosition = Vector2.zero;
+            trackRt.sizeDelta = new Vector2(0f, 40f);
+
+            Image trackImg = trackObj.GetComponent<Image>();
+            trackImg.sprite = HanUITheme.GetButtonPlateSprite();
+            trackImg.type = Image.Type.Sliced;
+            trackImg.color = HanUITheme.DeepSepiaInk;
+
+            Outline trackOutline = trackObj.GetComponent<Outline>();
+            trackOutline.effectColor = new Color(HanUITheme.SubduedBrass.r, HanUITheme.SubduedBrass.g, HanUITheme.SubduedBrass.b, 0.55f);
+            trackOutline.effectDistance = new Vector2(1f, -1f);
+
+            HorizontalLayoutGroup layout = trackObj.GetComponent<HorizontalLayoutGroup>();
+            layout.padding = new RectOffset(4, 4, 4, 4);
+            layout.spacing = 4f;
+            layout.childAlignment = TextAnchor.MiddleCenter;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = true;
+
+            Button enBtn = CreateSegmentButton(trackObj.transform, "LangBtn_EN", "EN", font);
+            Button roBtn = CreateSegmentButton(trackObj.transform, "LangBtn_RO", "RO", font);
+            Button huBtn = CreateSegmentButton(trackObj.transform, "LangBtn_HU", "HU", font);
+
+            HanSettingsLanguageRow comp = rowObj.AddComponent<HanSettingsLanguageRow>();
+            comp.rowLabel = lbl;
+            comp.englishButton = enBtn;
+            comp.romanianButton = roBtn;
+            comp.hungarianButton = huBtn;
+            comp.BindSegmentButtons();
+            comp.RefreshVisuals();
+            return comp;
+        }
+
+        private static Button CreateSegmentButton(Transform parent, string objName, string codeText, TMP_FontAsset font)
+        {
+            GameObject btnObj = new GameObject(objName, typeof(RectTransform), typeof(Image), typeof(Outline), typeof(Button));
+            btnObj.transform.SetParent(parent, false);
+
+            Image plate = btnObj.GetComponent<Image>();
+            plate.sprite = HanUITheme.GetButtonPlateSprite();
+            plate.type = Image.Type.Sliced;
+            plate.color = HanUITheme.CharcoalSurface;
+
+            Outline outline = btnObj.GetComponent<Outline>();
+            outline.effectColor = new Color(HanUITheme.SubduedBrass.r, HanUITheme.SubduedBrass.g, HanUITheme.SubduedBrass.b, 0.25f);
+            outline.effectDistance = new Vector2(1f, -1f);
+
+            Button btn = btnObj.GetComponent<Button>();
+            btn.targetGraphic = plate;
+            btn.navigation = new Navigation { mode = Navigation.Mode.Automatic };
+
+            GameObject barObj = new GameObject("ActiveBar", typeof(RectTransform), typeof(Image));
+            barObj.transform.SetParent(btnObj.transform, false);
+            RectTransform barRt = barObj.GetComponent<RectTransform>();
+            barRt.anchorMin = new Vector2(0.12f, 0f);
+            barRt.anchorMax = new Vector2(0.88f, 0f);
+            barRt.pivot = new Vector2(0.5f, 0f);
+            barRt.anchoredPosition = new Vector2(0f, 2f);
+            barRt.sizeDelta = new Vector2(0f, 2.5f);
+            Image barImg = barObj.GetComponent<Image>();
+            barImg.color = HanUITheme.BurnishedGold;
+            barImg.raycastTarget = false;
+
+            GameObject lblObj = new GameObject("Text", typeof(RectTransform));
+            lblObj.transform.SetParent(btnObj.transform, false);
+            RectTransform lblRt = lblObj.GetComponent<RectTransform>();
+            lblRt.anchorMin = Vector2.zero;
+            lblRt.anchorMax = Vector2.one;
+            lblRt.offsetMin = new Vector2(2f, 2f);
+            lblRt.offsetMax = new Vector2(-2f, -2f);
+
+            TMP_Text txt = lblObj.AddComponent<TextMeshProUGUI>();
+            HanUITheme.ApplyCrispSDF(txt, font);
+            txt.text = codeText;
+            txt.fontSize = 15f;
+            txt.enableAutoSizing = true;
+            txt.fontSizeMin = 10.5f;
+            txt.fontSizeMax = 15.5f;
+            txt.alignment = TextAlignmentOptions.Center;
+            txt.color = HanUITheme.AgedPaper;
+            txt.raycastTarget = false;
+
+            return btn;
         }
     }
 }

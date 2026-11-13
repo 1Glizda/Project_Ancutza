@@ -22,6 +22,10 @@ namespace Han.CheckIn
                 ">> Fast-Forward Check-Ins [F4]",
                 ">> Treci peste primire [F4]",
                 ">> Bejelentkezés átugrása [F4]");
+            Add("director.night_timer",
+                "Night Time Left: {0}",
+                "Timp rămas din noapte: {0}",
+                "Hátralévő éjszakai idő: {0}");
 
             Add("director.toast_arrivals",
                 "Night {0}: travelers arrive at the Han desk...",
@@ -451,18 +455,18 @@ namespace Han.CheckIn
                 "UMBRELE NOPȚII",
                 "AZ ÉJSZAKA ÁRNYAI");
             Add("catalog.intro.1.body",
-                "By night, mortals no longer rule the earth; it belongs only to the dead and the undead, and not even Esmeralda's Inn can keep travelers out of harm's way forever—nor protect Esmeralda herself. Every dawn brings a new burden she must carry to the end.",
-                "Noaptea oamenii nu mai stăpânesc pământul, aparține doar morților ori morților vii, iar nici măcar Hanul Esmeraldei nu poate ține pe veci călătorii departe de necaz și nici măcar pe ea însăși. Fiecare început de zi este o nouă povare ce trebuie să o poarte până la capăt.",
-                "Éjjel már nem az emberek uralják a földet, csak a holtaké és az élőholtaké, és még Esmeralda fogadója sem óvhatja meg örökké az utazókat a bajtól—sőt még őt magát sem. Minden új hajnal újabb terhet hoz, amelyet végig kell cipelnie.");
+                "By night, mortals no longer rule the earth; it belongs only to the dead and the undead, and not even Ancutza's Inn can keep travelers out of harm's way forever—nor protect Ancutza herself. Every dawn brings a new burden she must carry to the end.",
+                "Noaptea oamenii nu mai stăpânesc pământul, aparține doar morților ori morților vii, iar nici măcar Hanul Ancutzei nu poate ține pe veci călătorii departe de necaz și nici măcar pe ea însăși. Fiecare început de zi este o nouă povare ce trebuie să o poarte până la capăt.",
+                "Éjjel már nem az emberek uralják a földet, csak a holtaké és az élőholtaké, és még Ancutza fogadója sem óvhatja meg örökké az utazókat a bajtól—sőt még őt magát sem. Minden új hajnal újabb terhet hoz, amelyet végig kell cipelnie.");
 
             Add("catalog.intro.2.tag",
-                "CHRONICLE OF ESMERALDA",
-                "CRONICA ESMERALDEI",
-                "ESMERALDA KRÓNIKÁJA");
+                "CHRONICLE OF ANCUTZA",
+                "CRONICA ANCUTZEI",
+                "ANCUTZA KRÓNIKÁJA");
             Add("catalog.intro.2.body",
-                "From here on we follow Esmeralda's tale together, and across these chapters her fate rests solely in your hands. Whether she lives to see another dawn depends on you and every choice you make ahead.",
-                "De acum vom urmări împreună povestea Esmeraldei și, timp de câteva simple capitole, soarta ei va sta doar în mâinile tale. De va trăi să mai vadă un nou început depinde doar de tine și de deciziile ce le vei lua pe mai departe.",
-                "Innentől együtt követjük Esmeralda történetét, és néhány fejezeten át a sorsa egyedül a te kezedben van. Hogy megér-e még egy hajnalt, csak rajtad és a következő döntéseiden múlik.");
+                "From here on we follow Ancutza's tale together, and across these chapters her fate rests solely in your hands. Whether she lives to see another dawn depends on you and every choice you make ahead.",
+                "De acum vom urmări împreună povestea Ancutzei și, timp de câteva simple capitole, soarta ei va sta doar în mâinile tale. De va trăi să mai vadă un nou început depinde doar de tine și de deciziile ce le vei lua pe mai departe.",
+                "Innentől együtt követjük Ancutza történetét, és néhány fejezeten át a sorsa egyedül a te kezedben van. Hogy megér-e még egy hajnalt, csak rajtad és a következő döntéseiden múlik.");
 
             Add("catalog.intro.3.tag",
                 "FATE OF THE INN",
@@ -473,10 +477,10 @@ namespace Han.CheckIn
                 "Baftă ție, jucător al destinelor, căci mare nevoie vei mai avea!",
                 "Sok szerencsét neked, sorsok kovácsa, mert nagy szükséged lesz rá!");
 
-            Add("catalog.mood.PrimaZi.title",    "ESMERALDA · FIRST DAY",   "ESMERALDA · PRIMA ZI",   "ESMERALDA · ELSŐ NAP");
-            Add("catalog.mood.Optimist.title",   "ESMERALDA · HOPEFUL",     "ESMERALDA · OPTIMISTĂ",  "ESMERALDA · BIZAKODÓ");
-            Add("catalog.mood.Confuz.title",     "ESMERALDA · UNCERTAIN",   "ESMERALDA · CONFUZĂ",    "ESMERALDA · BIZONYTALAN");
-            Add("catalog.mood.Speriat.title",    "ESMERALDA · TERRIFIED",   "ESMERALDA · SPERIATĂ",   "ESMERALDA · RÉMÜLT");
+            Add("catalog.mood.PrimaZi.title",    "ANCUTZA · FIRST DAY",   "ANCUTZA · PRIMA ZI",   "ANCUTZA · ELSŐ NAP");
+            Add("catalog.mood.Optimist.title",   "ANCUTZA · HOPEFUL",     "ANCUTZA · OPTIMISTĂ",  "ANCUTZA · BIZAKODÓ");
+            Add("catalog.mood.Confuz.title",     "ANCUTZA · UNCERTAIN",   "ANCUTZA · CONFUZĂ",    "ANCUTZA · BIZONYTALAN");
+            Add("catalog.mood.Speriat.title",    "ANCUTZA · TERRIFIED",   "ANCUTZA · SPERIATĂ",   "ANCUTZA · RÉMÜLT");
 
             Add("catalog.mood.PrimaZi.line",
                 "A new sunrise, a new chance! I hope I can make it count!",
@@ -534,14 +538,14 @@ namespace Han.CheckIn
                 "hogy muzsikáljak az asztalodnál, ha helyet adsz nekem napfelkeltéig");
 
             Add("catalog.esmeralda.greeting",
-                "Good heart to you, {0}, leave your troubles at the door and let us speak a moment before you step into my humble inn! I am Esmeralda—now tell me, who are you?",
-                "Bună să-ți fie inima, {0}, lasă necazurile la intrare și hai să vorbim nițel înainte să intri în al meu umil han! Eu sunt Esmeralda, spune-mi acum, cine ești tu?",
-                "Jó szívvel köszöntelek, {0}, hagyd a gondjaidat a küszöbön, és váltsunk pár szót, mielőtt belépsz szerény fogadómba! Esmeralda vagyok—mondd hát, ki vagy te?");
+                "Good heart to you, {0}, leave your troubles at the door and let us speak a moment before you step into my humble inn! I am Ancutza—now tell me, who are you?",
+                "Bună să-ți fie inima, {0}, lasă necazurile la intrare și hai să vorbim nițel înainte să intri în al meu umil han! Eu sunt Ancutza, spune-mi acum, cine ești tu?",
+                "Jó szívvel köszöntelek, {0}, hagyd a gondjaidat a küszöbön, és váltsunk pár szót, mielőtt belépsz szerény fogadómba! Ancutza vagyok—mondd hát, ki vagy te?");
 
             Add("catalog.guest.intro",
-                "Pleased to meet you, gracious Esmeralda! I am {0}, {1}.",
-                "Încântat, umilă Esmeralda! Eu sunt {0}, {1}.",
-                "Örömömre szolgál, kedves Esmeralda! A nevem {0}, és {1}.");
+                "Pleased to meet you, gracious Ancutza! I am {0}, {1}.",
+                "Încântat, umilă Ancutza! Eu sunt {0}, {1}.",
+                "Örömömre szolgál, kedves Ancutza! A nevem {0}, és {1}.");
             Add("catalog.guest.unnamed", "a wandering traveler", "un călător", "egy vándor");
 
             Add("catalog.esmeralda.transition",
@@ -600,7 +604,7 @@ namespace Han.CheckIn
             Add("catalog.react.reject.0", "You will regret this!", "Îți va părea rău!", "Megbánod még ezt!");
             Add("catalog.react.reject.1", "You have doomed me!", "M-ai condamnat!", "Halálra ítéltél!");
 
-            Add("catalog.react.accept.0", "Thank you, fair Esmeralda!", "Mulțumesc, frumoasă Smaralda!", "Köszönöm, szép Esmeralda!");
+            Add("catalog.react.accept.0", "Thank you, fair Ancutza!", "Mulțumesc, frumoasă Ancutza!", "Köszönöm, szép Ancutza!");
             Add("catalog.react.accept.1", "At last!", "În sfârșit!", "Végre!");
         }
     }
