@@ -205,7 +205,9 @@ public class NPCController : MonoBehaviour
     private string Format(string line)
     {
         if (string.IsNullOrEmpty(line) || line.IndexOf('{') < 0) return line;
-        string victim = string.IsNullOrEmpty(HanGameDirector.VictimName) ? "the poor soul" : HanGameDirector.VictimName;
+        string victim = string.IsNullOrEmpty(HanGameDirector.VictimName)
+            ? HanLocalization.Get("npc.poor_soul")
+            : HanGameDirector.VictimName;
         string suspect = HanGameDirector.PickSuspectName(Guest != null ? Guest.guestName : null);
         return line.Replace("{victim}", victim).Replace("{suspect}", suspect);
     }
@@ -650,8 +652,8 @@ public class NPCController : MonoBehaviour
             convo = dialogueData.GetConversation(HanGameDirector.MurderDiscovered);
         }
 
-        string lineA = convo != null ? Format(convo.lineA) : "Hello!";
-        string lineB = convo != null ? otherNPC.Format(convo.lineB) : "Hi there!";
+        string lineA = convo != null ? Format(convo.lineA) : HanLocalization.Get("npc.fallback_hello");
+        string lineB = convo != null ? otherNPC.Format(convo.lineB) : HanLocalization.Get("npc.fallback_hi");
 
         speechBubble.ShowTypewriter(lineA, 30f);
         yield return new WaitForSeconds(speechBubbleDuration + (lineA.Length / 30f));

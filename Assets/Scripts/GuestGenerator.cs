@@ -24,45 +24,14 @@ namespace Han.CheckIn
             "Vulpe", "Zăpadă", "Ursu", "Lăcătuș", "din Sibiu", "din Brașov", "Călătorul", "Cojocaru"
         };
 
-        private static readonly string[] ArrivalTimes = { "Sunset", "Dusk", "Twilight", "Nightfall" };
-
-        private static readonly string[] NeutralNotes =
+        private static readonly string[] ArrivalTimeKeys =
         {
-            "Merchant travelling with barrels of coarse salt. Pays in old silver coin.",
-            "Pilgrim on the road to a distant monastery. Speaks softly, prays before eating.",
-            "Wool trader from Moldavia. Complains loudly about the price of the room.",
-            "Young scribe carrying sealed letters. Refuses to say who they are for.",
-            "Widow in mourning black. Asked for a room far from the stairs.",
-            "Blacksmith's apprentice, tired and dusty. Asked for hot broth and a bench.",
-            "Hunter with a worn crossbow. Says the woods are unusually quiet.",
-            "Travelling healer with jars of dried herbs. Offers remedies to the staff.",
-            "Soldier returning from the border. Sleeps with boots on and a knife at hand.",
-            "Cheese seller with a creaking cart. Insisted the horse sleeps close to the door.",
-            "Minstrel with a cracked fiddle. Hums the same sad tune all evening.",
-            "Quiet farmer who counts the exits of every room he enters."
+            "arrival.sunset", "arrival.dusk", "arrival.twilight", "arrival.nightfall"
         };
 
-        private static readonly string[] MonsterTells =
-        {
-            "Avoids the polished copper mirror in the common room.",
-            "Did not touch the garlic bread. Smelled it and turned pale.",
-            "Hands are ice cold. Asked to keep the shutters closed all night.",
-            "Eyes the stable horses and the horses will not stop trembling.",
-            "Refused to cross the threshold until the innkeeper said 'enter'.",
-            "Left no footprints in the muddy courtyard, the stable boy swears.",
-            "Wolves howled outside the moment this guest arrived.",
-            "Did not eat or drink anything, and asked for no candle in the room."
-        };
-
-        private static readonly string[] HumanDecoys =
-        {
-            "Startled by the church bell and spilled their cup.",
-            "Wears a rusted silver medallion. Says it was a gift from a late mother.",
-            "Asked for the shutters to be closed, afraid of the draught.",
-            "Has a harsh cough and dislikes bright candles.",
-            "Skips meals out of a long fast, not out of habit.",
-            "Avoids mirrors out of old superstition, or so they say."
-        };
+        private const int NeutralNotesCount = 12;
+        private const int MonsterTellsCount = 8;
+        private const int HumanDecoysCount = 6;
 
         private static readonly Color32[] SkinTones =
         {
@@ -88,15 +57,39 @@ namespace Han.CheckIn
             new Color32(44, 36, 30, 255), new Color32(58, 52, 44, 255), new Color32(36, 40, 52, 255)
         };
 
+        /// <summary>Randomly picks one of the four monster classifications.</summary>
+        public static MonsterType RollRandomMonsterType()
+        {
+            MonsterType[] pool = HanDialogueCatalog.AllMonsterTypes;
+            return pool[Random.Range(0, pool.Length)];
+        }
+
         /// <summary>Creates a fully populated guest (not yet checked in).</summary>
-        public static GuestData Create(GuestRole role, int night, HashSet<string> usedNames, HashSet<int> usedRooms, int maxRooms)
+        public static GuestData Create(
+            GuestRole role,
+            int night,
+            HashSet<string> usedNames,
+            HashSet<int> usedRooms,
+            int maxRooms,
+            MonsterType? forcedMonsterType = null)
         {
             var g = new GuestData();
             g.role = role;
+            g.monsterType = role == GuestRole.Monster
+                ? (forcedMonsterType.HasValue && forcedMonsterType.Value != MonsterType.None
+                    ? forcedMonsterType.Value
+                    : RollRandomMonsterType())
+                : MonsterType.None;
+
+            TravelerArchetype[] archetypes = HanDialogueCatalog.AllTravelerArchetypes;
+            g.archetype = archetypes[Random.Range(0, archetypes.Length)];
+
             g.arrivedOnNight = night;
-            g.guestName = UniqueName(usedNames);
+            g.guestName = UniqueName(usedNames, out bool isFallbackName, out int fallbackNumber);
+            g.usesGeneratedFallbackName = isFallbackName;
+            g.generatedFallbackNumber = fallbackNumber;
             g.roomNumber = FreeRoom(usedRooms, maxRooms);
-            g.arrivalTime = ArrivalTimes[Random.Range(0, ArrivalTimes.Length)];
+            g.arrivalTimeKey = ArrivalTimeKeys[Random.Range(0, ArrivalTimeKeys.Length)];
             g.hasHorse = Random.value < 0.45f;
             g.isAlive = true;
             g.isCheckedIn = false;
@@ -114,216 +107,142 @@ namespace Han.CheckIn
                 g.personality = humanTypes[Random.Range(0, humanTypes.Length)];
             }
 
-            BuildSmallTalk(g);
-            BuildQuestionResponses(g);
+            // Pick indices once so language changes re-translate existing travelers consistently
+            InvestigationPromptSet[] investigationPool = HanDialogueCatalog.AllInvestigationSets;
+            g.investigationSetIndex = Random.Range(0, investigationPool.Length);
+            InvestigationPromptSet pickedSet = investigationPool[g.investigationSetIndex];
+            g.investigationAnswerIndex = pickedSet.answers.Length > 0 ? Random.Range(0, pickedSet.answers.Length) : 0;
+            g.acceptReactionIndex = Random.Range(0, HanDialogueCatalog.GuestAcceptReactions.Length);
+            g.rejectReactionIndex = Random.Range(0, HanDialogueCatalog.GuestRejectReactions.Length);
+            g.roadAnswerIndex = Random.Range(0, HanDialogueCatalog.VampirOmNeckQuestion.answers.Length);
+            g.identityAnswerIndex = Random.Range(0, HanDialogueCatalog.VampirOmThresholdQuestion.answers.Length);
 
             float roll = Random.value;
             g.staysNights = roll < 0.4f ? 1 : (roll < 0.75f ? 2 : 3);
 
-            string note = NeutralNotes[Random.Range(0, NeutralNotes.Length)];
+            g.neutralNoteKey = $"guest.note.neutral.{Random.Range(0, NeutralNotesCount)}";
             if (role == GuestRole.Monster && Random.value < 0.75f)
-                note += " " + MonsterTells[Random.Range(0, MonsterTells.Length)];
+                g.clueNoteKey = $"guest.note.monster.{Random.Range(0, MonsterTellsCount)}";
             else if (role == GuestRole.Human && Random.value < 0.35f)
-                note += " " + HumanDecoys[Random.Range(0, HumanDecoys.Length)];
-            g.notes = note;
+                g.clueNoteKey = $"guest.note.decoy.{Random.Range(0, HumanDecoysCount)}";
+
+            ApplyLocalization(g);
 
             BuildSprites(g);
             return g;
         }
 
-        private static void BuildSmallTalk(GuestData g)
+        /// <summary>
+        /// Populates or refreshes all localized strings on a GuestData instance from its stored keys/indices.
+        /// Safe to call at runtime whenever the player switches language.
+        /// </summary>
+        public static void ApplyLocalization(GuestData g)
         {
-            switch (g.personality)
+            if (g == null) return;
+
+            if (g.defaultSampleId > 0)
             {
-                case PersonalityType.Shy:
-                    g.checkInSmallTalk = new[]
-                    {
-                        "U-um... good evening, sir. If you have a small bed left? Just somewhere quiet... if possible.",
-                        g.hasHorse ? "I tied my tired mare outside by the post... she had a hard trek through the mountain pass."
-                                   : "I came on foot all the way from the valley... my boots are soaked through.",
-                        "I won't be any trouble, innkeeper... I'll keep to my corner."
-                    };
-                    g.checkInApprovedLine = "T-thank you... may the saints bless your warm hearth.";
-                    break;
-
-                case PersonalityType.Pushy:
-                    g.checkInSmallTalk = new[]
-                    {
-                        "Hurry it up, innkeeper! My cloak is soaked with snow and mud, and my silver coin is good.",
-                        g.hasHorse ? "I brought my prized horse too—make sure your stable has fresh hay and clean oats!"
-                                   : "My carriage broke an axle miles back, so don't ask! Just give me a warm bed.",
-                        "Best room you have, right now! Stop staring and write down my name!"
-                    };
-                    g.checkInApprovedLine = "Finally! Keep the hearth burning, I expect hot broth at sunrise!";
-                    break;
-
-                case PersonalityType.Jovial:
-                    g.checkInSmallTalk = new[]
-                    {
-                        "Ah! Greetings, good master of the house! What a magnificent fire you keep burning tonight!",
-                        g.hasHorse ? "My sturdy mare is hitched at the stall; she loves oats almost as much as I love spiced ale!"
-                                   : "Walked all the way from Sibiu, and my knees are singing for a soft mattress!",
-                        "Tell me, innkeeper, have you any of that smoked Transylvanian cheese left?"
-                    };
-                    g.checkInApprovedLine = "Much obliged, friend! Pour me a tankard later by the fire!";
-                    break;
-
-                case PersonalityType.Stern:
-                    g.checkInSmallTalk = new[]
-                    {
-                        "Good evening. I require lodging for the night. Single occupancy.",
-                        g.hasHorse ? "My mount is hitched at the stall outside. Stable it properly."
-                                   : "Travelling light on foot. No beast to tend to.",
-                        "I value silence and privacy above all else. Here are my credentials."
-                    };
-                    g.checkInApprovedLine = "Understood. Good night, innkeeper.";
-                    break;
-
-                case PersonalityType.Nervous:
-                    g.checkInSmallTalk = new[]
-                    {
-                        "I... I need a room immediately. Please lock the courtyard gate behind me.",
-                        g.hasHorse ? "My horse went wild near the pine trees... it smelled something foul in the wind."
-                                   : "I ran the last mile. Shadows... unnatural shadows moving among the trees.",
-                        "Do your room doors have sturdy iron bolts? Tell me they do."
-                    };
-                    g.checkInApprovedLine = "The bolts work, yes? God preserve us tonight. Thank you.";
-                    break;
-
-                case PersonalityType.MonsterUncanny:
-                default:
-                    g.checkInSmallTalk = new[]
-                    {
-                        "Good evening, innkeeper... The woods were so quiet tonight. Almost... breathless.",
-                        g.hasHorse ? "My beast... refused to cross your gate. Its heart was beating so rapidly. Fascinating."
-                                   : "The darkness carries me swiftly. I have no need for weary beasts.",
-                        "Such vibrant warmth in your inn tonight. So many pulses beating under one roof..."
-                    };
-                    g.checkInApprovedLine = "Sleep soundly, innkeeper. Sleep very soundly...";
-                    break;
+                if (!string.IsNullOrEmpty(g.arrivalTimeKey))
+                    g.arrivalTime = HanLocalization.Get(g.arrivalTimeKey);
+                string sampleNotes = HanLocalization.Get($"sample.guest.{g.defaultSampleId}.notes");
+                g.notes = AppendDynamicNoteSuffixes(g, sampleNotes);
+                return;
             }
+
+            if (g.usesGeneratedFallbackName)
+                g.guestName = HanLocalization.Get("guest.fallback_prefix") + g.generatedFallbackNumber;
+
+            if (!string.IsNullOrEmpty(g.arrivalTimeKey))
+                g.arrivalTime = HanLocalization.Get(g.arrivalTimeKey);
+
+            if (!string.IsNullOrEmpty(g.neutralNoteKey))
+            {
+                string baseNote = HanLocalization.Get(g.neutralNoteKey);
+                if (!string.IsNullOrEmpty(g.clueNoteKey))
+                    baseNote += " " + HanLocalization.Get(g.clueNoteKey);
+                g.notes = AppendDynamicNoteSuffixes(g, baseNote);
+            }
+
+            if (g.investigationSetIndex >= 0)
+            {
+                InvestigationPromptSet pickedInvestigation = HanDialogueCatalog.GetInvestigationSetByIndex(g.investigationSetIndex);
+                string pickedAnswer = pickedInvestigation.answers.Length > 0
+                    ? pickedInvestigation.answers[Mathf.Clamp(g.investigationAnswerIndex, 0, pickedInvestigation.answers.Length - 1)]
+                    : string.Empty;
+
+                var steps = new[]
+                {
+                    new CheckInDialogueStep(true, HanDialogueCatalog.BuildEsmeraldaGreeting(g.archetype)),
+                    new CheckInDialogueStep(false, HanDialogueCatalog.BuildGuestIntroduction(g.guestName, g.archetype)),
+                    new CheckInDialogueStep(true, HanDialogueCatalog.EsmeraldaTransitionToQuestionsLine),
+                    new CheckInDialogueStep(true, pickedInvestigation.question),
+                    new CheckInDialogueStep(false, pickedAnswer)
+                };
+
+                g.checkInDialogueSteps = steps;
+                g.checkInSmallTalk = new string[steps.Length];
+                for (int i = 0; i < steps.Length; i++)
+                    g.checkInSmallTalk[i] = steps[i].line;
+            }
+
+            string[] acceptPool = HanDialogueCatalog.GuestAcceptReactions;
+            if (g.acceptReactionIndex >= 0 && acceptPool.Length > 0)
+                g.checkInApprovedLine = acceptPool[Mathf.Clamp(g.acceptReactionIndex, 0, acceptPool.Length - 1)];
+
+            string[] rejectPool = HanDialogueCatalog.GuestRejectReactions;
+            if (g.rejectReactionIndex >= 0 && rejectPool.Length > 0)
+                g.checkInRejectedLine = rejectPool[Mathf.Clamp(g.rejectReactionIndex, 0, rejectPool.Length - 1)];
+
+            g.responsePurpose = HanDialogueCatalog.BuildGuestIntroduction(g.guestName, g.archetype);
+            g.responseHorse = HanLocalization.Get(g.hasHorse ? "guest.response.horse_yes" : "guest.response.horse_no");
+
+            string[] roadPool = HanDialogueCatalog.VampirOmNeckQuestion.answers;
+            if (roadPool.Length > 0)
+                g.responseRoad = roadPool[Mathf.Clamp(g.roadAnswerIndex, 0, roadPool.Length - 1)];
+
+            string[] idPool = HanDialogueCatalog.VampirOmThresholdQuestion.answers;
+            if (idPool.Length > 0)
+                g.responseIdentity = idPool[Mathf.Clamp(g.identityAnswerIndex, 0, idPool.Length - 1)];
         }
 
-        private static void BuildQuestionResponses(GuestData g)
+        private static string AppendDynamicNoteSuffixes(GuestData g, string coreNote)
         {
-            bool isMonster = g.role == GuestRole.Monster;
+            string result = coreNote ?? string.Empty;
 
-            switch (g.personality)
+            if (!string.IsNullOrEmpty(g.horseNoteKey))
             {
-                case PersonalityType.Shy:
-                    g.responsePurpose = isMonster
-                        ? "I... I only travel when the sun is down. The cold night air is gentle on my skin... mortals shouldn't worry about me."
-                        : "Just... heading to see my sister in the lower valley before the mountain passes freeze over with snow.";
-
-                    g.responseHorse = g.hasHorse
-                        ? "Yes, a gentle mare... she is waiting outside. Please, make sure she gets a warm stall in the barn."
-                        : (isMonster ? "No animals... beasts shriek and thrash when I touch them. I move much swifter on my own feet anyway."
-                                     : "On foot, sir... walked from dawn. My knees are trembling and my boots are worn through.");
-
-                    g.responseRoad = isMonster
-                        ? "The road was peaceful... the dark forest smells like fresh iron. I mean... sweet pine needles."
-                        : "I heard heavy thumping near the ravine... I didn't dare look back into the trees. I ran all the way!";
-
-                    g.responseIdentity = isMonster
-                        ? "Names... a name is just what mortal prey call each other, isn't it? But yes, write whatever you wish on your ledger..."
-                        : "M-my name is written true on your parchment, innkeeper. I am an honest traveler, I swear it.";
-                    break;
-
-                case PersonalityType.Pushy:
-                    g.responsePurpose = isMonster
-                        ? "None of your blasted business! What I do under the dark moon doesn't concern an innkeeper who values their throat!"
-                        : "Merchant trade! I have sealed contracts to deliver to the boyars by tomorrow noon! Stop wasting my time!";
-
-                    g.responseHorse = g.hasHorse
-                        ? "Of course I brought a horse! A thoroughbred stallion—if he catches a chill in your stables, I'll deduct it from your pay!"
-                        : (isMonster ? "I don't need nags to carry me! Beasts are frail, cowardly food... err, cattle!"
-                                     : "My carriage snapped an axle on your wretched rocky road! Had to hike the last two leagues on foot!");
-
-                    g.responseRoad = isMonster
-                        ? "Nothing out there dared cross my path. The wolves scampered with their tails between their legs when they caught my scent."
-                        : "The road is a disgrace! Wolves circling the tree line and shadowy shapes darting between the snowdrifts!";
-
-                    g.responseIdentity = isMonster
-                        ? "You dare question me?! Write down whatever name you want, it won't change what happens tonight!"
-                        : "I am who I say I am! My purse is full of good silver coin, look for yourself and hand over my key!";
-                    break;
-
-                case PersonalityType.Jovial:
-                    g.responsePurpose = isMonster
-                        ? "Ha! Hunting for merriment! So many tender, lively souls gathered under one roof tonight... truly mouth-watering!"
-                        : "Ha! A pitcher of spiced wine and a roaring fire! Singing songs and trading tales from the Danube!";
-
-                    g.responseHorse = g.hasHorse
-                        ? "A sturdy chestnut beast! Loves sugar beets and hates mountain wolves. Tuck him into a dry stall, friend!"
-                        : (isMonster ? "Ha-ha! Why feed a horse oats when you can outrun the wind on your own two paws... err, boots!"
-                                     : "No horse, friend, but two good legs and a cheerful tune! Keeps the frost out of the marrow!");
-
-                    g.responseRoad = isMonster
-                        ? "Oh, the road was glorious! Cold shadows dancing under the moon! A perfect night for a feast!"
-                        : "Eerie mist near the old crossroad! Felt like a pair of glowing red eyes was watching from the brambles!";
-
-                    g.responseIdentity = isMonster
-                        ? "Call me whatever pleases your ear, friend! In the dark, we all sound the same when we laugh!"
-                        : "Known from here to Brașov as an honest trader! Put my name in your ledger with pride, innkeeper!";
-                    break;
-
-                case PersonalityType.Stern:
-                    g.responsePurpose = isMonster
-                        ? "I follow the scent of travelers. Inns are such convenient places for the hungry to gather."
-                        : "Official courier business. Traveling on urgent decree. I require quiet lodging and no unnecessary interruptions.";
-
-                    g.responseHorse = g.hasHorse
-                        ? "Black mare, well-trained. Stabled in the courtyard. Do not let disorderly travelers agitate her."
-                        : (isMonster ? "Horses are hysterical creatures. They smell death before it strikes. I move on foot."
-                                     : "Traveled on foot with a heavy soldier's pack. A disciplined march builds endurance.");
-
-                    g.responseRoad = isMonster
-                        ? "The mountain is silent. The living would do well to lock their doors tight before midnight."
-                        : "A predator stalked parallel to the trail for two miles. Large tracks in the fresh snow. Keep your courtyard gates barred.";
-
-                    g.responseIdentity = isMonster
-                        ? "My identity is eternal. The ink on your paper will rot away long before I do."
-                        : "My papers bear the magistrate's wax seal. Inspect the ledger and confirm my chamber.";
-                    break;
-
-                case PersonalityType.Nervous:
-                    g.responsePurpose = isMonster
-                        ? "Is the front door barred?! Are there silver mirrors here?! Tell me nobody in this inn carries silver!"
-                        : "I... I had to leave my village in a hurry. Strange things were happening in the woods... people going missing...";
-
-                    g.responseHorse = g.hasHorse
-                        ? "My horse was foaming at the bit with terror... something was tracking us from the ridge above!"
-                        : (isMonster ? "Horses kick and bite... they know what I am... they always know..."
-                                     : "No horse... I kept looking over my shoulder every step. Every shadow looked like reaching claws!");
-
-                    g.responseRoad = isMonster
-                        ? "Blood... so much blood on the snow. But it wasn't mine... none of it was mine..."
-                        : "I saw a silhouette standing on top of the ruined chapel... standing completely motionless in the howling wind!";
-
-                    g.responseIdentity = isMonster
-                        ? "Don't look at my eyes! Just write the name! Write the name and look away!"
-                        : "I have my papers right here, sir! Please don't cast me back out into the night!";
-                    break;
-
-                case PersonalityType.MonsterUncanny:
-                default:
-                    g.responsePurpose = "I was drawn to the warmth of your Han. So many beating hearts inside these wooden walls... irresistible.";
-                    g.responseHorse = "No horse. Animals have an unfortunate habit of screaming when they look into my eyes.";
-                    g.responseRoad = "The woods are wide awake tonight, innkeeper. The hunt has already begun. You can smell the iron in the air, can't you?";
-                    g.responseIdentity = "You write names on paper... as if ink and parchment could protect you from what comes in the dark.";
-                    break;
+                result += g.horseNoteKey == "guest.note.horse_stall"
+                    ? HanLocalization.Format("guest.note.horse_stall", g.horseStallIndex + 1)
+                    : HanLocalization.Get(g.horseNoteKey);
             }
+
+            if (g.isDeceasedInBook)
+            {
+                string prefix = g.deceasedRoomNumber > 0
+                    ? HanLocalization.Format("guest.note.deceased_room", g.deceasedRoomNumber)
+                    : HanLocalization.Get("guest.note.deceased_generic");
+                result = prefix + result;
+            }
+
+            return result;
         }
 
-        private static string UniqueName(HashSet<string> used)
+        private static string UniqueName(HashSet<string> used, out bool isFallback, out int fallbackNumber)
         {
             for (int i = 0; i < 40; i++)
             {
                 string n = FirstNames[Random.Range(0, FirstNames.Length)] + " " + LastNames[Random.Range(0, LastNames.Length)];
-                if (used.Add(n)) return n;
+                if (used.Add(n))
+                {
+                    isFallback = false;
+                    fallbackNumber = 0;
+                    return n;
+                }
             }
-            string fallback = "Traveler #" + Random.Range(100, 999);
+            fallbackNumber = Random.Range(100, 999);
+            string fallback = HanLocalization.Get("guest.fallback_prefix") + fallbackNumber;
             used.Add(fallback);
+            isFallback = true;
             return fallback;
         }
 

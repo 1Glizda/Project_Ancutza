@@ -46,6 +46,81 @@ namespace Han.CheckIn
         [Tooltip("Subtle vintage ribbon tick for NPC dialogue transcript typing.")]
         [SerializeField] private AudioClip typewriterTickClip;
 
+        [Header("Typewriter Sound Cadence")]
+        [Tooltip("Global multiplier controlling typewriter sound density/timing (1.0 = default).")]
+        [Range(0.25f, 3.0f)]
+        [SerializeField] private float typewriterCadenceMultiplier = 1.0f;
+
+        [Tooltip("Minimum unscaled seconds allowed between successive typewriter tick sounds.")]
+        [Range(0.005f, 0.25f)]
+        [SerializeField] private float typewriterMinInterval = 0.028f;
+
+        [Tooltip("Play a typewriter sound every N visible non-whitespace characters.")]
+        [Range(1, 8)]
+        [SerializeField] private int typewriterCharsPerTick = 2;
+
+        [Tooltip("Minimum random pitch jitter for typewriter ticks.")]
+        [Range(0.5f, 1.5f)]
+        [SerializeField] private float typewriterPitchMin = 0.90f;
+
+        [Tooltip("Maximum random pitch jitter for typewriter ticks.")]
+        [Range(0.5f, 1.5f)]
+        [SerializeField] private float typewriterPitchMax = 1.12f;
+
+        [Tooltip("Base volume multiplier relative to Master UI Volume for typing ticks.")]
+        [Range(0f, 1f)]
+        [SerializeField] private float typewriterVolume = 0.30f;
+
+        [Tooltip("Shared pause multiplier on punctuation marks for UI typewriters using global cadence.")]
+        [Range(1.0f, 6.0f)]
+        [SerializeField] private float typewriterPunctuationPauseMultiplier = 2.6f;
+
+        [Tooltip("Subtle pitch offset applied when landing on punctuation marks.")]
+        [Range(-0.25f, 0.25f)]
+        [SerializeField] private float punctuationPitchOffset = -0.05f;
+
+        public float TypewriterCadenceMultiplier
+        {
+            get => typewriterCadenceMultiplier;
+            set => typewriterCadenceMultiplier = Mathf.Clamp(value, 0.25f, 3.0f);
+        }
+
+        public float TypewriterMinInterval
+        {
+            get => typewriterMinInterval;
+            set => typewriterMinInterval = Mathf.Max(0.005f, value);
+        }
+
+        public int TypewriterCharsPerTick
+        {
+            get => typewriterCharsPerTick;
+            set => typewriterCharsPerTick = Mathf.Clamp(value, 1, 8);
+        }
+
+        public float TypewriterPunctuationPauseMultiplier
+        {
+            get => typewriterPunctuationPauseMultiplier;
+            set => typewriterPunctuationPauseMultiplier = Mathf.Clamp(value, 1.0f, 6.0f);
+        }
+
+        public float TypewriterPitchMin
+        {
+            get => typewriterPitchMin;
+            set => typewriterPitchMin = Mathf.Clamp(value, 0.5f, 1.5f);
+        }
+
+        public float TypewriterPitchMax
+        {
+            get => typewriterPitchMax;
+            set => typewriterPitchMax = Mathf.Clamp(value, 0.5f, 1.5f);
+        }
+
+        public float TypewriterVolume
+        {
+            get => typewriterVolume;
+            set => typewriterVolume = Mathf.Clamp01(value);
+        }
+
         [Header("Inspector Audio Event Hooks")]
         public UnityEvent onUIHover;
         public UnityEvent onUIClick;
@@ -166,7 +241,47 @@ namespace Han.CheckIn
         public static void PlayTypewriterTick()
         {
             var inst = EnsureInstance();
-            if (inst != null) inst.TriggerTypewriterTick();
+            if (inst != null) inst.TriggerTypewriterTick('\0', 1f, 1f);
+        }
+
+        public static void PlayTypewriterTick(char typedChar, float pitchScale = 1f, float volumeScale = 1f, float minIntervalOverride = -1f)
+        {
+            var inst = EnsureInstance();
+            if (inst != null) inst.TriggerTypewriterTick(typedChar, pitchScale, volumeScale, minIntervalOverride);
+        }
+
+        public static int GetConfiguredCharsPerTick(int fallback = 2)
+        {
+            return Instance != null ? Mathf.Clamp(Instance.typewriterCharsPerTick, 1, 8) : Mathf.Max(1, fallback);
+        }
+
+        public static float GetConfiguredPunctuationMultiplier(float fallback = 2.6f)
+        {
+            return Instance != null ? Mathf.Max(1f, Instance.typewriterPunctuationPauseMultiplier) : Mathf.Max(1f, fallback);
+        }
+
+        public static float GetConfiguredCadenceMultiplier()
+        {
+            return Instance != null ? Mathf.Clamp(Instance.typewriterCadenceMultiplier, 0.25f, 3f) : 1f;
+        }
+
+        /// <summary>Updates typewriter sound cadence settings cleanly at runtime.</summary>
+        public void ConfigureTypewriterCadence(
+            int charsPerTick,
+            float minIntervalSeconds,
+            float cadenceMultiplier = 1f,
+            float volume = -1f,
+            float pitchMin = -1f,
+            float pitchMax = -1f,
+            float punctuationPauseMultiplier = -1f)
+        {
+            typewriterCharsPerTick = Mathf.Clamp(charsPerTick, 1, 8);
+            typewriterMinInterval = Mathf.Max(0.005f, minIntervalSeconds);
+            typewriterCadenceMultiplier = Mathf.Clamp(cadenceMultiplier, 0.25f, 3.0f);
+            if (volume >= 0f) typewriterVolume = Mathf.Clamp01(volume);
+            if (pitchMin > 0f) typewriterPitchMin = Mathf.Clamp(pitchMin, 0.5f, 1.5f);
+            if (pitchMax > 0f) typewriterPitchMax = Mathf.Clamp(Mathf.Max(typewriterPitchMin, pitchMax), 0.5f, 1.5f);
+            if (punctuationPauseMultiplier >= 1f) typewriterPunctuationPauseMultiplier = Mathf.Clamp(punctuationPauseMultiplier, 1f, 6f);
         }
 
         public void TriggerHover()
@@ -252,15 +367,37 @@ namespace Han.CheckIn
 
         public void TriggerTypewriterTick()
         {
-            if (Time.unscaledTime - _lastTypeTickTime < 0.028f) return;
+            TriggerTypewriterTick('\0', 1f, 1f, -1f);
+        }
+
+        public void TriggerTypewriterTick(char typedChar, float pitchScale, float volumeScale, float minIntervalOverride = -1f)
+        {
+            float baseInterval = minIntervalOverride > 0f ? minIntervalOverride : typewriterMinInterval;
+            float effectiveInterval = Mathf.Max(0.004f, baseInterval / Mathf.Max(0.25f, typewriterCadenceMultiplier));
+            if (Time.unscaledTime - _lastTypeTickTime < effectiveInterval) return;
             _lastTypeTickTime = Time.unscaledTime;
 
             EnsureInitialized();
             if (typewriterTickClip != null && uiAudioSource != null)
             {
-                uiAudioSource.pitch = UnityEngine.Random.Range(0.90f, 1.12f);
-                uiAudioSource.PlayOneShot(typewriterTickClip, masterUIVolume * 0.30f);
+                float loPitch = Mathf.Min(typewriterPitchMin, typewriterPitchMax);
+                float hiPitch = Mathf.Max(typewriterPitchMin, typewriterPitchMax);
+                float pitch = UnityEngine.Random.Range(loPitch, hiPitch) * Mathf.Max(0.25f, pitchScale);
+
+                if (IsPunctuationChar(typedChar))
+                {
+                    pitch += punctuationPitchOffset;
+                }
+
+                uiAudioSource.pitch = Mathf.Clamp(pitch, 0.45f, 1.85f);
+                float vol = masterUIVolume * typewriterVolume * Mathf.Clamp(volumeScale, 0f, 2f);
+                uiAudioSource.PlayOneShot(typewriterTickClip, vol);
             }
+        }
+
+        public static bool IsPunctuationChar(char c)
+        {
+            return c == '.' || c == ',' || c == '!' || c == '?' || c == ':' || c == ';' || c == '…' || c == '—' || c == '-';
         }
 
         // ------------------------------------------------------------------

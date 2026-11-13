@@ -27,10 +27,33 @@ namespace Han.CheckIn
         public AudioClip teaserStinger;
 
         /// <summary>
-        /// Returns the full teaser line (e.g. "Night One, good luck").
+        /// Returns the localized title for this night entry.
+        /// </summary>
+        public string GetLocalizedTitle()
+        {
+            if (nightNumber >= 1)
+                return HanLocalization.GetNightTitle(nightNumber);
+            return title;
+        }
+
+        /// <summary>
+        /// Returns the localized subtitle for this night entry.
+        /// </summary>
+        public string GetLocalizedSubtitle()
+        {
+            if (nightNumber >= 1)
+                return HanLocalization.GetNightSubtitle(nightNumber);
+            return subtitle;
+        }
+
+        /// <summary>
+        /// Returns the full localized teaser line (e.g. "Night One, good luck").
         /// </summary>
         public string GetFullTeaserLine()
         {
+            if (nightNumber >= 1)
+                return HanLocalization.GetNightHeadline(nightNumber);
+
             if (!string.IsNullOrWhiteSpace(combinedTeaserText))
                 return combinedTeaserText;
 
@@ -40,7 +63,7 @@ namespace Han.CheckIn
             if (!string.IsNullOrWhiteSpace(title))
                 return title;
 
-            return $"Night {nightNumber}";
+            return HanLocalization.Format("night.fallback_title_num", nightNumber);
         }
     }
 
@@ -117,12 +140,14 @@ namespace Han.CheckIn
                 return list[nightIndex];
 
             int fallbackNightNum = Mathf.Max(1, nightIndex + 1);
+            string localizedTitle = HanLocalization.GetNightTitle(fallbackNightNum);
+            string localizedSubtitle = HanLocalization.GetNightSubtitle(fallbackNightNum);
             return new NightConfigEntry
             {
                 nightNumber = fallbackNightNum,
-                title = $"Night {NumberToWord(fallbackNightNum)}",
-                subtitle = "keep going",
-                combinedTeaserText = $"Night {NumberToWord(fallbackNightNum)}, keep going",
+                title = localizedTitle,
+                subtitle = localizedSubtitle,
+                combinedTeaserText = HanLocalization.GetNightHeadline(fallbackNightNum),
                 displayDuration = 3.0f
             };
         }

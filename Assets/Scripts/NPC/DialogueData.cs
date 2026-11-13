@@ -1,4 +1,5 @@
 using UnityEngine;
+using Han.CheckIn;
 
 [CreateAssetMenu(fileName = "NewDialogueData", menuName = "NPC/Dialogue Data")]
 public class DialogueData : ScriptableObject
@@ -65,17 +66,27 @@ public class DialogueData : ScriptableObject
         new ConversationExchange { lineA = "I heard screaming before dawn.", lineB = "So did I. Where was {suspect}?" }
     };
 
+    private static ConversationExchange LocalizeExchange(ConversationExchange exchange)
+    {
+        if (exchange == null) return null;
+        return new ConversationExchange
+        {
+            lineA = HanLocalization.LocalizeBuiltInDialogueLine(exchange.lineA),
+            lineB = HanLocalization.LocalizeBuiltInDialogueLine(exchange.lineB)
+        };
+    }
+
     public string GetRandom(string[] pool)
     {
         if (pool == null || pool.Length == 0)
             return string.Empty;
-        return pool[Random.Range(0, pool.Length)];
+        return HanLocalization.LocalizeBuiltInDialogueLine(pool[Random.Range(0, pool.Length)]);
     }
 
     private static string PickOrDefault(string[] custom, string[] fallback)
     {
         string[] pool = (custom != null && custom.Length > 0) ? custom : fallback;
-        return pool[Random.Range(0, pool.Length)];
+        return HanLocalization.LocalizeBuiltInDialogueLine(pool[Random.Range(0, pool.Length)]);
     }
 
     public string GetGreeting(bool murderActive)
@@ -102,13 +113,13 @@ public class DialogueData : ScriptableObject
     {
         if (npcConversations == null || npcConversations.Length == 0)
             return null;
-        return npcConversations[Random.Range(0, npcConversations.Length)];
+        return LocalizeExchange(npcConversations[Random.Range(0, npcConversations.Length)]);
     }
 
     public ConversationExchange GetConversation(bool murderActive)
     {
         if (!murderActive) return GetRandomConversation();
         var pool = (murderConversations != null && murderConversations.Length > 0) ? murderConversations : DefaultMurderConversations;
-        return pool[Random.Range(0, pool.Length)];
+        return LocalizeExchange(pool[Random.Range(0, pool.Length)]);
     }
 }

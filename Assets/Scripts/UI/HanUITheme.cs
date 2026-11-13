@@ -89,8 +89,15 @@ namespace Han.CheckIn
         {
             if (_cachedFont != null) return _cachedFont;
 
+            HanUITheme themeAsset = Resources.Load<HanUITheme>("HanUITheme");
+            if (themeAsset != null && themeAsset.primaryFont != null)
+            {
+                _cachedFont = themeAsset.primaryFont;
+            }
+
 #if UNITY_EDITOR
-            _cachedFont = UnityEditor.AssetDatabase.LoadAssetAtPath<TMP_FontAsset>("Assets/Fonts/Minecraft-Regular SDF.asset");
+            if (_cachedFont == null)
+                _cachedFont = UnityEditor.AssetDatabase.LoadAssetAtPath<TMP_FontAsset>("Assets/Fonts/Minecraft-Regular SDF.asset");
             if (_cachedFont == null)
                 _cachedFont = UnityEditor.AssetDatabase.LoadAssetAtPath<TMP_FontAsset>("Assets/TextMesh Pro/Resources/Fonts & Materials/LiberationSans SDF.asset");
 #endif
@@ -100,7 +107,29 @@ namespace Han.CheckIn
             if (_cachedFont == null)
                 _cachedFont = TMP_Settings.defaultFontAsset;
 
+            if (_cachedFont != null && (_cachedFont.fallbackFontAssetTable == null || _cachedFont.fallbackFontAssetTable.Count == 0))
+            {
+                TMP_FontAsset fallback = Resources.Load<TMP_FontAsset>("Fonts & Materials/LiberationSans SDF - Fallback");
+                if (fallback != null && fallback != _cachedFont)
+                {
+                    if (_cachedFont.fallbackFontAssetTable == null)
+                        _cachedFont.fallbackFontAssetTable = new System.Collections.Generic.List<TMP_FontAsset>();
+                    _cachedFont.fallbackFontAssetTable.Add(fallback);
+                }
+            }
+
             return _cachedFont;
+        }
+
+        /// <summary>
+        /// Resolves a dynamic Font usable by Unity IMGUI styles that supports Romanian and Hungarian diacritics.
+        /// </summary>
+        public static Font GetProjectImGuiFont()
+        {
+            TMP_FontAsset tmpFont = GetProjectFont();
+            if (tmpFont != null && tmpFont.sourceFontFile != null)
+                return tmpFont.sourceFontFile;
+            return null;
         }
 
         /// <summary>

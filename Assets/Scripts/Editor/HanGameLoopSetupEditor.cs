@@ -9,7 +9,6 @@ using UnityEngine.InputSystem.UI;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.UI;
-using UnityEngine.Video;
 using TMPro;
 
 namespace Han.CheckIn.Editor
@@ -24,7 +23,6 @@ namespace Han.CheckIn.Editor
         private const string NIGHT_ASSET_RESOURCES_PATH = "Assets/Resources/NightConfigData.asset";
         private const string THEME_ASSET_RESOURCES_PATH = "Assets/Resources/HanUITheme.asset";
         private const string PAUSE_VOLUME_PROFILE_PATH = "Assets/Resources/HanPauseBlurProfile.asset";
-        private const string INTRO_VIDEO_PATH = "Assets/Videos/Han_Intro.mp4";
 
         [MenuItem("Han/Setup Full Game Loop UI & Managers")]
         public static void SetupFullGameLoopMenu()
@@ -104,6 +102,20 @@ namespace Han.CheckIn.Editor
             AddVignetteGrainOverlay(mainMenuPanel.transform, 0.65f);
             CanvasGroup mainMenuCanvasGroup = mainMenuPanel.AddComponent<CanvasGroup>();
 
+            Button mainMenuLanguageButton = CreateTactilePlateButton(
+                mainMenuPanel.transform,
+                "LanguageSwitchButton",
+                HanLocalization.Get("ui.language_button"),
+                font,
+                new Vector2(-36f, -32f),
+                new Vector2(260f, 44f),
+                isPrimary: false);
+            RectTransform mainLangRt = mainMenuLanguageButton.GetComponent<RectTransform>();
+            mainLangRt.anchorMin = new Vector2(1f, 1f);
+            mainLangRt.anchorMax = new Vector2(1f, 1f);
+            mainLangRt.pivot = new Vector2(1f, 1f);
+            mainLangRt.anchoredPosition = new Vector2(-36f, -32f);
+
             GameObject menuCard = CreateArchivalModalCard(
                 mainMenuPanel.transform,
                 "MainMenuCard",
@@ -133,31 +145,11 @@ namespace Han.CheckIn.Editor
             TMP_Text footerNote = CreateTMPText(menuCard.transform, "MenuFooterNote", "Use Mouse or [W/S / Arrow Keys + Enter] to Navigate", font, 13.5f, FontStyles.Italic, TextAlignmentOptions.Center, HanUITheme.DisabledInk);
             SetRect(footerNote.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 26f), new Vector2(480f, 22f));
 
-            // --- D. Intro Video Panel ---
-            GameObject introVideoPanel = CreateFullScreenPanel(canvasObj.transform, "IntroVideoPanel", HanUITheme.DeepSepiaInk);
-            GameObject rawImgObj = new GameObject("VideoRawImage");
-            rawImgObj.transform.SetParent(introVideoPanel.transform, false);
-            RectTransform rawRt = rawImgObj.AddComponent<RectTransform>();
-            SetFullStretch(rawRt);
-            RawImage videoRawImage = rawImgObj.AddComponent<RawImage>();
-            videoRawImage.color = Color.white;
-
-            AddVignetteGrainOverlay(introVideoPanel.transform, 0.35f);
-
-            VideoPlayer videoPlayer = introVideoPanel.AddComponent<VideoPlayer>();
-            videoPlayer.playOnAwake = false;
-            videoPlayer.isLooping = false;
-            videoPlayer.renderMode = VideoRenderMode.RenderTexture;
-            videoPlayer.audioOutputMode = VideoAudioOutputMode.Direct;
-
-            VideoClip introClip = AssetDatabase.LoadAssetAtPath<VideoClip>(INTRO_VIDEO_PATH);
-            if (introClip != null)
-            {
-                videoPlayer.clip = introClip;
-            }
-
-            Button skipVideoButton = CreateTactilePlateButton(introVideoPanel.transform, "SkipVideoButton", "SKIP INTRO [SPACE]", font, new Vector2(-170f, 48f), new Vector2(280f, 50f), isPrimary: false);
-            SetRect(skipVideoButton.GetComponent<RectTransform>(), new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-38f, 34f), new Vector2(280f, 50f));
+            // --- D. Visual Novel Intro Panel ---
+            GameObject introVideoPanel = CreateFullScreenPanel(canvasObj.transform, "VisualNovelIntroPanel", HanUITheme.DeepSepiaInk);
+            VisualNovelIntroController vnIntroController = introVideoPanel.AddComponent<VisualNovelIntroController>();
+            vnIntroController.EnsureVisualNovelUI();
+            Button skipVideoButton = vnIntroController.SkipButton;
             introVideoPanel.SetActive(false);
 
             // --- E. Night Teaser Panel ---
@@ -166,18 +158,21 @@ namespace Han.CheckIn.Editor
             CanvasGroup nightTeaserCanvasGroup = nightTeaserPanel.AddComponent<CanvasGroup>();
             nightTeaserCanvasGroup.alpha = 0f;
 
-            TMP_Text teaserTitleText = CreateTMPText(nightTeaserPanel.transform, "TeaserTitleText", "--  NIGHT ONE  --", font, 22f, FontStyles.Bold | FontStyles.UpperCase, TextAlignmentOptions.Center, HanUITheme.SubduedBrass);
-            SetRect(teaserTitleText.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 84f), new Vector2(900f, 38f));
+            TMP_Text teaserTitleText = CreateTMPText(nightTeaserPanel.transform, "TeaserTitleText", "--  NIGHT ONE  ·  ESMERALDA  --", font, 22f, FontStyles.Bold | FontStyles.UpperCase, TextAlignmentOptions.Center, HanUITheme.SubduedBrass);
+            SetRect(teaserTitleText.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 128f), new Vector2(980f, 38f));
 
-            CreateOrnamentalDivider(nightTeaserPanel.transform, "TeaserTopDivider", new Vector2(0.5f, 0.5f), new Vector2(0f, 52f), new Vector2(520f, 8f), 0.75f);
+            CreateOrnamentalDivider(nightTeaserPanel.transform, "TeaserTopDivider", new Vector2(0.5f, 0.5f), new Vector2(0f, 96f), new Vector2(540f, 8f), 0.75f);
 
-            TMP_Text teaserHeadlineText = CreateTMPText(nightTeaserPanel.transform, "TeaserHeadlineText", "Night One, good luck", font, 54f, FontStyles.Bold, TextAlignmentOptions.Center, HanUITheme.WarmParchment);
-            SetRect(teaserHeadlineText.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 0f), new Vector2(1200f, 86f));
+            TMP_Text teaserHeadlineText = CreateTMPText(nightTeaserPanel.transform, "TeaserHeadlineText", $"„{HanDialogueCatalog.DayLinePrimaZi}”", font, 34f, FontStyles.Italic, TextAlignmentOptions.Center, HanUITheme.WarmParchment);
+            teaserHeadlineText.enableAutoSizing = true;
+            teaserHeadlineText.fontSizeMin = 21f;
+            teaserHeadlineText.fontSizeMax = 34f;
+            SetRect(teaserHeadlineText.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -2f), new Vector2(1140f, 165f));
 
-            CreateOrnamentalDivider(nightTeaserPanel.transform, "TeaserBottomDivider", new Vector2(0.5f, 0.5f), new Vector2(0f, -52f), new Vector2(520f, 8f), 0.75f);
+            CreateOrnamentalDivider(nightTeaserPanel.transform, "TeaserBottomDivider", new Vector2(0.5f, 0.5f), new Vector2(0f, -98f), new Vector2(540f, 8f), 0.75f);
 
-            TMP_Text teaserSubtitleText = CreateTMPText(nightTeaserPanel.transform, "TeaserSubtitleText", "good luck", font, 23f, FontStyles.Italic, TextAlignmentOptions.Center, HanUITheme.AgedPaper);
-            SetRect(teaserSubtitleText.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -86f), new Vector2(900f, 40f));
+            TMP_Text teaserSubtitleText = CreateTMPText(nightTeaserPanel.transform, "TeaserSubtitleText", "Apasă [SPACE] sau Click pentru a continua...", font, 21f, FontStyles.Italic, TextAlignmentOptions.Center, HanUITheme.AgedPaper);
+            SetRect(teaserSubtitleText.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -134f), new Vector2(920f, 40f));
             nightTeaserPanel.SetActive(false);
 
             // --- F. In-Game Pause Menu Panel (Smooth Dim + Vignette + Framed Ledger Card) ---
@@ -219,7 +214,7 @@ namespace Han.CheckIn.Editor
                 new Vector2(0.5f, 0.5f),
                 new Vector2(0.5f, 0.5f),
                 Vector2.zero,
-                new Vector2(600f, 560f),
+                new Vector2(600f, 620f),
                 HanUITheme.CharcoalSurface);
 
             TMP_Text settingsTitle = CreateTMPText(settingsCard.transform, "SettingsTitle", "LEDGER SETTINGS", font, 34f, FontStyles.Bold, TextAlignmentOptions.Center, HanUITheme.WarmParchment);
@@ -227,15 +222,17 @@ namespace Han.CheckIn.Editor
 
             CreateOrnamentalDivider(settingsCard.transform, "SettingsDivider", new Vector2(0.5f, 1f), new Vector2(0f, -92f), new Vector2(460f, 8f), 0.8f);
 
-            Slider masterVolSlider = CreateArchivalSliderRow(settingsCard.transform, "MasterVolumeRow", "MASTER AUDIO VOLUME", font, new Vector2(0f, 108f), 0f, 1f, 0.85f);
-            Slider lookSensSlider = CreateArchivalSliderRow(settingsCard.transform, "LookSensitivityRow", "CAMERA LOOK SENSITIVITY", font, new Vector2(0f, 48f), 4f, 45f, 20f);
-            Toggle doorHighlightToggle = CreateArchivalToggleRow(settingsCard.transform, "DoorHighlightRow", "INTERACTION OUTLINE HIGHLIGHTS", font, new Vector2(0f, -12f), true);
-            Toggle lowEndModeToggle = CreateArchivalToggleRow(settingsCard.transform, "LowEndModeRow", "LOW-END PC MODE (LOW RAM / NO GPU) [F8]", font, new Vector2(0f, -68f), false);
+            Slider masterVolSlider = CreateArchivalSliderRow(settingsCard.transform, "MasterVolumeRow", "MASTER AUDIO VOLUME", font, new Vector2(0f, 142f), 0f, 1f, 0.85f);
+            Slider lookSensSlider = CreateArchivalSliderRow(settingsCard.transform, "LookSensitivityRow", "CAMERA LOOK SENSITIVITY", font, new Vector2(0f, 82f), 4f, 45f, 20f);
+            Toggle doorHighlightToggle = CreateArchivalToggleRow(settingsCard.transform, "DoorHighlightRow", "INTERACTION OUTLINE HIGHLIGHTS", font, new Vector2(0f, 22f), true);
+            Toggle lowEndModeToggle = CreateArchivalToggleRow(settingsCard.transform, "LowEndModeRow", "LOW-END PC MODE (LOW RAM / NO GPU) [F8]", font, new Vector2(0f, -36f), false);
+
+            Button settingsLanguageButton = CreateTactilePlateButton(settingsCard.transform, "SettingsLanguageButton", HanLocalization.Get("ui.language_button"), font, new Vector2(0f, -102f), new Vector2(340f, 44f), isPrimary: false);
 
             TMP_Text controlsHint = CreateTMPText(settingsCard.transform, "ControlsHint", "[ESC] Pause  |  [TAB] Guest Book  |  [F8] Low-End PC Mode  |  [F6] End Night", font, 14f, FontStyles.Italic, TextAlignmentOptions.Center, HanUITheme.AgedPaper);
-            SetRect(controlsHint.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 108f), new Vector2(540f, 26f));
+            SetRect(controlsHint.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 118f), new Vector2(540f, 26f));
 
-            Button settingsBackButton = CreateTactilePlateButton(settingsCard.transform, "SettingsBackButton", "RETURN", font, new Vector2(0f, -200f), new Vector2(280f, 54f), isPrimary: true);
+            Button settingsBackButton = CreateTactilePlateButton(settingsCard.transform, "SettingsBackButton", "RETURN", font, new Vector2(0f, -252f), new Vector2(280f, 54f), isPrimary: true);
             settingsPanel.SetActive(false);
 
             // --- H. Credits Modal Sub-Panel ---
@@ -256,7 +253,7 @@ namespace Han.CheckIn.Editor
 
             CreateOrnamentalDivider(creditsCard.transform, "CreditsDivider", new Vector2(0.5f, 1f), new Vector2(0f, -92f), new Vector2(440f, 8f), 0.8f);
 
-            TMP_Text creditsBody = CreateTMPText(creditsCard.transform, "CreditsBody", "PROIECTUL ANCUȚA\n\nNarrative, Systems & Bureaucratic Desk Direction\nTransylvanian Inn Mystery Team\n\nArchival Typography & Tactile Interface System", font, 19.5f, FontStyles.Normal, TextAlignmentOptions.Center, HanUITheme.AgedPaper);
+            TMP_Text creditsBody = CreateTMPText(creditsCard.transform, "CreditsBody", HanLocalization.Get("credits.body"), font, 19.5f, FontStyles.Normal, TextAlignmentOptions.Center, HanUITheme.AgedPaper);
             SetRect(creditsBody.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 18f), new Vector2(480f, 190f));
 
             Button creditsBackButton = CreateTactilePlateButton(creditsCard.transform, "CreditsBackButton", "RETURN", font, new Vector2(0f, -158f), new Vector2(280f, 54f), isPrimary: true);
@@ -321,6 +318,7 @@ namespace Han.CheckIn.Editor
             so.FindProperty("settingsCanvasGroup").objectReferenceValue = settingsCanvasGroup;
             so.FindProperty("settingsCardRect").objectReferenceValue = settingsCard.GetComponent<RectTransform>();
             so.FindProperty("settingsBackButton").objectReferenceValue = settingsBackButton;
+            so.FindProperty("settingsLanguageButton").objectReferenceValue = settingsLanguageButton;
             so.FindProperty("masterVolumeSlider").objectReferenceValue = masterVolSlider;
             so.FindProperty("lookSensitivitySlider").objectReferenceValue = lookSensSlider;
             so.FindProperty("doorHighlightToggle").objectReferenceValue = doorHighlightToggle;
@@ -332,9 +330,10 @@ namespace Han.CheckIn.Editor
             so.FindProperty("creditsBackButton").objectReferenceValue = creditsBackButton;
 
             so.FindProperty("introVideoPanel").objectReferenceValue = introVideoPanel;
-            so.FindProperty("introVideoPlayer").objectReferenceValue = videoPlayer;
-            so.FindProperty("introVideoRawImage").objectReferenceValue = videoRawImage;
-            so.FindProperty("introVideoClip").objectReferenceValue = introClip;
+            so.FindProperty("visualNovelIntro").objectReferenceValue = vnIntroController;
+            so.FindProperty("introVideoPlayer").objectReferenceValue = null;
+            so.FindProperty("introVideoRawImage").objectReferenceValue = null;
+            so.FindProperty("introVideoClip").objectReferenceValue = null;
             so.FindProperty("skipVideoButton").objectReferenceValue = skipVideoButton;
 
             so.FindProperty("nightConfigData").objectReferenceValue = nightConfig;
@@ -644,6 +643,9 @@ namespace Han.CheckIn.Editor
 
             // 3. Button Label (Crisp TMP SDF)
             TMP_Text txt = CreateTMPText(btnObj.transform, "Label", label, font, 21f, FontStyles.Bold, TextAlignmentOptions.MidlineLeft, HanUITheme.WarmParchment);
+            txt.enableAutoSizing = true;
+            txt.fontSizeMin = 11f;
+            txt.fontSizeMax = 21f;
             RectTransform txtRt = txt.rectTransform;
             txtRt.anchorMin = Vector2.zero;
             txtRt.anchorMax = Vector2.one;

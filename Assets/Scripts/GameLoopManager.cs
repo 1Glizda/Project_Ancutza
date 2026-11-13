@@ -51,6 +51,7 @@ namespace Han.CheckIn
         [SerializeField] private CanvasGroup settingsCanvasGroup;
         [SerializeField] private RectTransform settingsCardRect;
         [SerializeField] private Button settingsBackButton;
+        [SerializeField] private Button settingsLanguageButton;
         [SerializeField] private Slider masterVolumeSlider;
         [SerializeField] private Slider lookSensitivitySlider;
         [SerializeField] private Toggle doorHighlightToggle;
@@ -62,36 +63,42 @@ namespace Han.CheckIn
         [SerializeField] private Button creditsBackButton;
 
         // ------------------------------------------------------------------
-        //  2. Intro Video References
+        //  2. Intro Sequence (Visual Novel)
         // ------------------------------------------------------------------
-        [Header("2. Intro Video Sequence")]
+        [Header("2. Visual Novel Intro Sequence")]
         [SerializeField] private GameObject introVideoPanel;
+        [SerializeField] private VisualNovelIntroController visualNovelIntro;
         [SerializeField] private VideoPlayer introVideoPlayer;
         [SerializeField] private RawImage introVideoRawImage;
         [SerializeField] private VideoClip introVideoClip;
         [SerializeField] private Button skipVideoButton;
-        [Tooltip("Allow skipping the intro video with Space, Enter, or Escape.")]
+        [Tooltip("Allow skipping the intro sequence with Escape.")]
         [SerializeField] private bool allowKeyboardSkipVideo = true;
-        [Tooltip("Fallback duration if no VideoClip or URL is assigned to the VideoPlayer.")]
+        [Tooltip("Fallback duration if no VisualNovelIntroController can be created.")]
         [SerializeField] private float fallbackVideoDuration = 2.5f;
 
         // ------------------------------------------------------------------
-        //  3. Night Teaser & Data-Driven Config
+        //  3. Night Teaser & Esmeralda Day Mood
         // ------------------------------------------------------------------
-        [Header("3. Night Teaser & Data Asset")]
+        [Header("3. Night Teaser & Esmeralda Day Mood")]
         [Tooltip("External ScriptableObject driving all night teaser titles and subtitles.")]
         [SerializeField] private NightConfigData nightConfigData;
         [SerializeField] private GameObject nightTeaserPanel;
         [SerializeField] private CanvasGroup nightTeaserCanvasGroup;
-        [Tooltip("Primary text displaying the full teaser line (e.g. 'Night One, good luck').")]
+        [Tooltip("Primary text displaying Esmeralda's opening day line.")]
         [SerializeField] private TMP_Text teaserHeadlineText;
-        [Tooltip("Optional separate title text (e.g. 'Night One').")]
+        [Tooltip("Title text displaying night title and Esmeralda's current mood.")]
         [SerializeField] private TMP_Text teaserTitleText;
-        [Tooltip("Optional separate subtitle text (e.g. 'good luck').")]
+        [Tooltip("Optional subtitle / prompt hint text.")]
         [SerializeField] private TMP_Text teaserSubtitleText;
         [SerializeField] private float teaserFadeInDuration = 0.8f;
-        [SerializeField] private float teaserHoldDuration = 2.8f;
+        [SerializeField] private float teaserHoldDuration = 3.2f;
         [SerializeField] private float teaserFadeOutDuration = 1.1f;
+        [SerializeField] private EsmeraldaDayMood currentEsmeraldaMood = EsmeraldaDayMood.PrimaZi;
+        [SerializeField] private bool typewriteDayOpeningLine = true;
+        [Range(12f, 90f)] [SerializeField] private float dayOpeningCharsPerSecond = 38f;
+        [Range(1, 8)] [SerializeField] private int dayOpeningCharsPerSoundTick = 2;
+        [Range(1f, 5f)] [SerializeField] private float dayOpeningPunctuationPause = 2.6f;
 
         // ------------------------------------------------------------------
         //  4. Transition to Gameplay (Desk POV) & HUD
@@ -176,6 +183,17 @@ namespace Han.CheckIn
         private float initialCameraFov = 60f;
         private Camera mainCamera;
 
+        private int _murdersLastNight;
+        private int _totalMurdersAccumulated;
+        private int _wrongKicksLastNight;
+        private bool _hasManualMoodOverride;
+        private EsmeraldaDayMood _manualMoodOverride;
+        private Button _languageSwitchButton;
+        private TMP_Text _languageSwitchButtonText;
+        private Button _settingsLanguageButton;
+        private TMP_Text _settingsLanguageButtonText;
+        private int _activeTeaserNightIndex = -1;
+
         // ------------------------------------------------------------------
         //  Unity Lifecycle
         // ------------------------------------------------------------------
@@ -192,6 +210,14 @@ namespace Han.CheckIn
             BindUIButtons();
             ConfigureExplicitKeyboardNavigation();
             CachePlayerControllers();
+            RefreshLocalizedLoopUI();
+
+            HanLocalization.OnLanguageChanged -= HandleLanguageChanged;
+            HanLocalization.OnLanguageChanged += HandleLanguageChanged;
+            HanGameDirector.OnMurderCommitted -= HandleMurderCommitted;
+            HanGameDirector.OnMurderCommitted += HandleMurderCommitted;
+            HanGameDirector.OnGuestKickedOut -= HandleGuestKickedOut;
+            HanGameDirector.OnGuestKickedOut += HandleGuestKickedOut;
 
             // Prevent HanGameDirector from auto-starting in the background while on Main Menu
             if (gameDirector != null)
@@ -210,6 +236,9 @@ namespace Han.CheckIn
             if (Instance == this) Instance = null;
             if (Time.timeScale == 0f) Time.timeScale = 1f;
             HanLowEndOptimizer.OnLowEndModeChanged -= HandleExternalLowEndModeChanged;
+            HanLocalization.OnLanguageChanged -= HandleLanguageChanged;
+            HanGameDirector.OnMurderCommitted -= HandleMurderCommitted;
+            HanGameDirector.OnGuestKickedOut -= HandleGuestKickedOut;
 
             if (introVideoPlayer != null)
             {
@@ -326,6 +355,11 @@ namespace Han.CheckIn
         public void OnPlayButtonClicked()
         {
             CurrentNightIndex = 0;
+            _murdersLastNight = 0;
+            _totalMurdersAccumulated = 0;
+            _wrongKicksLastNight = 0;
+            currentEsmeraldaMood = EsmeraldaDayMood.PrimaZi;
+
             CloseSubPanelsImmediate();
             SetActiveSafe(mainMenuPanel, false);
 
@@ -471,65 +505,82 @@ namespace Han.CheckIn
             activeFlowCoroutine = null;
         }
 
+        private VisualNovelIntroController EnsureVisualNovelIntroController()
+        {
+            if (visualNovelIntro != null) return visualNovelIntro;
+
+            if (introVideoPanel != null)
+            {
+                visualNovelIntro = introVideoPanel.GetComponent<VisualNovelIntroController>();
+                if (visualNovelIntro == null)
+                {
+                    visualNovelIntro = introVideoPanel.AddComponent<VisualNovelIntroController>();
+                }
+                visualNovelIntro.EnsureVisualNovelUI();
+                if (visualNovelIntro.SkipButton != null)
+                {
+                    skipVideoButton = visualNovelIntro.SkipButton;
+                }
+            }
+            else
+            {
+                Canvas targetCanvas = GetComponentInChildren<Canvas>(true);
+                if (targetCanvas == null)
+                {
+                    targetCanvas = FindFirstObjectByType<Canvas>(FindObjectsInactive.Include);
+                }
+                if (targetCanvas != null)
+                {
+                    GameObject panelObj = new GameObject("VisualNovelIntroPanel", typeof(RectTransform));
+                    panelObj.transform.SetParent(targetCanvas.transform, false);
+                    RectTransform rt = panelObj.GetComponent<RectTransform>();
+                    rt.anchorMin = Vector2.zero;
+                    rt.anchorMax = Vector2.one;
+                    rt.offsetMin = Vector2.zero;
+                    rt.offsetMax = Vector2.zero;
+
+                    introVideoPanel = panelObj;
+                    visualNovelIntro = panelObj.AddComponent<VisualNovelIntroController>();
+                    visualNovelIntro.EnsureVisualNovelUI();
+                    skipVideoButton = visualNovelIntro.SkipButton;
+                }
+            }
+
+            return visualNovelIntro;
+        }
+
         private IEnumerator PlayIntroVideoRoutine()
         {
             SetState(GameLoopState.IntroVideo);
             introVideoFinishedOrSkipped = false;
 
+            if (introVideoPlayer != null)
+            {
+                if (introVideoPlayer.isPlaying) introVideoPlayer.Stop();
+                introVideoPlayer.enabled = false;
+            }
+            if (introVideoRawImage != null)
+            {
+                introVideoRawImage.gameObject.SetActive(false);
+            }
+
+            VisualNovelIntroController vn = EnsureVisualNovelIntroController();
+
             SetActiveSafe(introVideoPanel, true);
             UnlockCursor();
 
-            if (focusNavigator != null && skipVideoButton != null)
+            if (focusNavigator != null)
             {
-                focusNavigator.FocusSelectable(skipVideoButton);
+                Selectable target = vn != null && vn.ContinueButton != null ? vn.ContinueButton : skipVideoButton;
+                if (target != null) focusNavigator.FocusSelectable(target);
             }
 
             onIntroVideoStarted?.Invoke();
-            Debug.Log("[GameLoopManager] Starting Intro Video sequence...");
+            Debug.Log("[GameLoopManager] Starting Visual Novel Intro sequence...");
 
-            bool hasValidVideo = false;
-            if (introVideoPlayer != null)
+            if (vn != null)
             {
-                if (introVideoClip != null && introVideoPlayer.clip == null)
-                {
-                    introVideoPlayer.clip = introVideoClip;
-                }
-
-                SetupVideoRenderTarget();
-
-                if (introVideoPlayer.clip != null || !string.IsNullOrWhiteSpace(introVideoPlayer.url))
-                {
-                    hasValidVideo = true;
-                    introVideoPlayer.loopPointReached -= HandleVideoLoopPointReached;
-                    introVideoPlayer.errorReceived -= HandleVideoError;
-                    introVideoPlayer.loopPointReached += HandleVideoLoopPointReached;
-                    introVideoPlayer.errorReceived += HandleVideoError;
-
-                    introVideoPlayer.Prepare();
-                    float prepareTimeout = 4f;
-                    while (!introVideoPlayer.isPrepared && !introVideoFinishedOrSkipped && prepareTimeout > 0f)
-                    {
-                        prepareTimeout -= Time.unscaledDeltaTime;
-                        yield return null;
-                    }
-
-                    if (!introVideoFinishedOrSkipped && introVideoPlayer.isPrepared)
-                    {
-                        introVideoPlayer.Play();
-                    }
-                    else if (!introVideoPlayer.isPrepared)
-                    {
-                        hasValidVideo = false;
-                    }
-                }
-            }
-
-            if (hasValidVideo)
-            {
-                while (!introVideoFinishedOrSkipped && introVideoPlayer != null)
-                {
-                    yield return null;
-                }
+                yield return vn.PlayIntroSequenceRoutine(() => introVideoFinishedOrSkipped = true);
             }
             else
             {
@@ -541,26 +592,23 @@ namespace Han.CheckIn
                 }
             }
 
-            if (introVideoPlayer != null)
-            {
-                introVideoPlayer.loopPointReached -= HandleVideoLoopPointReached;
-                introVideoPlayer.errorReceived -= HandleVideoError;
-                if (introVideoPlayer.isPlaying) introVideoPlayer.Stop();
-            }
-
             SetActiveSafe(introVideoPanel, false);
             onIntroVideoCompleted?.Invoke();
-            Debug.Log("[GameLoopManager] Intro Video finished.");
+            Debug.Log("[GameLoopManager] Visual Novel Intro completed.");
         }
 
         /// <summary>
-        /// Public method to skip the intro video immediately (bound to Skip UI button or keyboard).
+        /// Public method to skip the intro sequence immediately (bound to Skip UI button or Esc).
         /// </summary>
         public void SkipIntroVideo()
         {
             if (CurrentState != GameLoopState.IntroVideo) return;
             introVideoFinishedOrSkipped = true;
-            Debug.Log("[GameLoopManager] Intro Video skipped by player.");
+            if (visualNovelIntro != null)
+            {
+                visualNovelIntro.RequestSkip();
+            }
+            Debug.Log("[GameLoopManager] Visual Novel Intro skipped by player.");
         }
 
         private void HandleVideoLoopPointReached(VideoPlayer source)
@@ -574,22 +622,80 @@ namespace Han.CheckIn
             introVideoFinishedOrSkipped = true;
         }
 
+        /// <summary>Overrides Esmeralda's mood for the upcoming day teaser.</summary>
+        public void SetNextDayMoodOverride(EsmeraldaDayMood mood)
+        {
+            _hasManualMoodOverride = true;
+            _manualMoodOverride = mood;
+            currentEsmeraldaMood = mood;
+        }
+
+        /// <summary>Resolves Esmeralda's mood for the current night/day based on previous night performance.</summary>
+        public EsmeraldaDayMood ResolveDayMoodForNight(int nightIndex)
+        {
+            if (_hasManualMoodOverride)
+            {
+                _hasManualMoodOverride = false;
+                return _manualMoodOverride;
+            }
+
+            if (nightIndex <= 0)
+                return EsmeraldaDayMood.PrimaZi;
+
+            if (_totalMurdersAccumulated >= 2 || (_murdersLastNight > 0 && nightIndex >= 2))
+                return EsmeraldaDayMood.Speriat;
+
+            if (_murdersLastNight > 0 || _wrongKicksLastNight > 0)
+                return EsmeraldaDayMood.Confuz;
+
+            return EsmeraldaDayMood.Optimist;
+        }
+
         private IEnumerator ShowNightTeaserRoutine(int nightIndex)
         {
             SetState(GameLoopState.NightTeaser);
 
-            // Fetch data-driven night entry from ScriptableObject asset
+            // Fetch data-driven night entry + Esmeralda's mood-reactive opening line
             NightConfigEntry entry = GetNightEntrySafe(nightIndex);
-            string fullLine = entry.GetFullTeaserLine();
+            EsmeraldaDayMood mood = ResolveDayMoodForNight(nightIndex);
+            currentEsmeraldaMood = mood;
+            _activeTeaserNightIndex = nightIndex;
 
-            if (teaserHeadlineText != null)
-                teaserHeadlineText.text = fullLine;
+            BuildNightTeaserTexts(entry, mood, out string moodHeader, out string fullQuotedLine, out string fullSubtitle);
 
             if (teaserTitleText != null)
-                teaserTitleText.text = !string.IsNullOrWhiteSpace(entry.title) ? $"--  {entry.title.ToUpperInvariant()}  --" : fullLine;
+            {
+                teaserTitleText.text = moodHeader;
+                teaserTitleText.rectTransform.anchoredPosition = new Vector2(0f, 128f);
+            }
+
+            if (nightTeaserPanel != null)
+            {
+                Transform topDiv = nightTeaserPanel.transform.Find("TeaserTopDivider");
+                if (topDiv is RectTransform topDivRt) topDivRt.anchoredPosition = new Vector2(0f, 96f);
+
+                Transform botDiv = nightTeaserPanel.transform.Find("TeaserBottomDivider");
+                if (botDiv is RectTransform botDivRt) botDivRt.anchoredPosition = new Vector2(0f, -98f);
+            }
+
+            if (teaserHeadlineText != null)
+            {
+                teaserHeadlineText.rectTransform.sizeDelta = new Vector2(1140f, 165f);
+                teaserHeadlineText.rectTransform.anchoredPosition = new Vector2(0f, -2f);
+                teaserHeadlineText.fontSize = 34f;
+                teaserHeadlineText.enableAutoSizing = true;
+                teaserHeadlineText.fontSizeMin = 21f;
+                teaserHeadlineText.fontSizeMax = 34f;
+                teaserHeadlineText.fontStyle = FontStyles.Italic;
+                teaserHeadlineText.lineSpacing = 8f;
+                teaserHeadlineText.text = typewriteDayOpeningLine ? "" : fullQuotedLine;
+            }
 
             if (teaserSubtitleText != null)
-                teaserSubtitleText.text = entry.subtitle ?? "";
+            {
+                teaserSubtitleText.rectTransform.anchoredPosition = new Vector2(0f, -134f);
+                teaserSubtitleText.text = fullSubtitle;
+            }
 
             if (entry.teaserStinger != null && uiAudioSource != null)
             {
@@ -614,18 +720,69 @@ namespace Han.CheckIn
                 screenFadeCanvasGroup.blocksRaycasts = true;
             }
 
-            onNightTeaserShown?.Invoke(entry.nightNumber, fullLine);
-            Debug.Log($"[GameLoopManager] Showing Night Teaser #{entry.nightNumber}: \"{fullLine}\"");
+            onNightTeaserShown?.Invoke(entry.nightNumber, fullQuotedLine);
+            Debug.Log($"[GameLoopManager] Night #{entry.nightNumber} ({mood}): \"{fullQuotedLine}\"");
 
             if (nightTeaserCanvasGroup != null)
             {
                 yield return FadeCanvasGroupUnscaled(nightTeaserCanvasGroup, 0f, 1f, teaserFadeInDuration);
             }
 
-            float holdTime = entry.displayDuration > 0f ? entry.displayDuration : teaserHoldDuration;
+            // Typewrite Esmeralda's opening line using configurable cadence
+            bool skipOrContinuePressed = false;
+            if (teaserHeadlineText != null && typewriteDayOpeningLine)
+            {
+                teaserHeadlineText.text = fullQuotedLine;
+                teaserHeadlineText.maxVisibleCharacters = 0;
+                teaserHeadlineText.ForceMeshUpdate();
+
+                int totalChars = teaserHeadlineText.textInfo.characterCount;
+                int revealed = 0;
+                int step = HanUIAudioManager.GetConfiguredCharsPerTick(dayOpeningCharsPerSoundTick);
+                int lastTickChar = -step;
+                float timer = 0f;
+                float baseDelay = 1f / Mathf.Max(12f, dayOpeningCharsPerSecond);
+
+                while (revealed < totalChars && !skipOrContinuePressed)
+                {
+                    if (WasTeaserAdvancePressed())
+                    {
+                        skipOrContinuePressed = true;
+                        break;
+                    }
+
+                    timer -= Time.unscaledDeltaTime;
+                    while (revealed < totalChars && timer <= 0f)
+                    {
+                        char c = revealed < teaserHeadlineText.textInfo.characterInfo.Length
+                            ? teaserHeadlineText.textInfo.characterInfo[revealed].character
+                            : '\0';
+                        revealed++;
+                        teaserHeadlineText.maxVisibleCharacters = revealed;
+
+                        step = HanUIAudioManager.GetConfiguredCharsPerTick(dayOpeningCharsPerSoundTick);
+                        if (!char.IsWhiteSpace(c) && (revealed - lastTickChar >= step))
+                        {
+                            lastTickChar = revealed;
+                            HanUIAudioManager.PlayTypewriterTick(c);
+                        }
+
+                        float pause = HanUIAudioManager.IsPunctuationChar(c)
+                            ? Mathf.Max(1f, dayOpeningPunctuationPause)
+                            : UnityEngine.Random.Range(0.88f, 1.12f);
+                        timer += baseDelay * pause;
+                    }
+                    yield return null;
+                }
+
+                teaserHeadlineText.maxVisibleCharacters = 99999;
+            }
+
+            float holdTime = Mathf.Max(teaserHoldDuration, entry.displayDuration > 0f ? entry.displayDuration : 0f);
             float elapsed = 0f;
             while (elapsed < holdTime)
             {
+                if (elapsed > 0.25f && WasTeaserAdvancePressed()) break;
                 elapsed += Time.unscaledDeltaTime;
                 yield return null;
             }
@@ -767,12 +924,14 @@ namespace Han.CheckIn
             NightConfigEntry entry = GetNightEntrySafe(CurrentNightIndex);
             if (hudNightTitleText != null)
             {
-                hudNightTitleText.text = $"[ {entry.title.ToUpperInvariant()} ]";
+                hudNightTitleText.text = $"[ {entry.GetLocalizedTitle().ToUpperInvariant()} ]";
+                ApplyAutoSizeOnce(hudNightTitleText, 12f);
             }
 
             if (hudObjectiveText != null)
             {
-                hudObjectiveText.text = "Inspect arriving travelers at the ledger.  [ESC] Pause  |  [F6] End Night";
+                hudObjectiveText.text = HanLocalization.Get("hud.objective");
+                ApplyAutoSizeOnce(hudObjectiveText, 11f);
             }
 
             if (gameDirector != null)
@@ -790,6 +949,9 @@ namespace Han.CheckIn
         /// </summary>
         public void StartDeskCheckInSequence(int nightNumber)
         {
+            _murdersLastNight = 0;
+            _wrongKicksLastNight = 0;
+
             Debug.Log($"[GameLoopManager] Starting Desk Check-In Sequence for Night {nightNumber} (bringing first NPC to desk).");
             onStartDeskCheckIn?.Invoke();
             OnDeskCheckInTriggered?.Invoke(nightNumber);
@@ -797,6 +959,20 @@ namespace Han.CheckIn
             if (gameDirector != null)
             {
                 gameDirector.StartNightCheckInFromGameLoop(nightNumber);
+            }
+        }
+
+        private void HandleMurderCommitted(GuestData victim, GuestData killer)
+        {
+            _murdersLastNight++;
+            _totalMurdersAccumulated++;
+        }
+
+        private void HandleGuestKickedOut(GuestData kicked)
+        {
+            if (kicked != null && kicked.role != GuestRole.Monster)
+            {
+                _wrongKicksLastNight++;
             }
         }
 
@@ -1125,8 +1301,290 @@ namespace Han.CheckIn
 
             HanLowEndOptimizer.EnsureInstance();
             EnsureLowEndModeToggleUI();
+            EnsureLanguageButtonUI();
             HanLowEndOptimizer.OnLowEndModeChanged -= HandleExternalLowEndModeChanged;
             HanLowEndOptimizer.OnLowEndModeChanged += HandleExternalLowEndModeChanged;
+        }
+
+        private void HandleLanguageChanged(HanLanguage _)
+        {
+            RefreshLocalizedLoopUI();
+        }
+
+        private void OnLanguageSwitchButtonClicked()
+        {
+            HanUIAudioManager.PlayClick();
+            HanLocalization.CycleLanguage();
+        }
+
+        private void BuildNightTeaserTexts(
+            NightConfigEntry entry,
+            EsmeraldaDayMood mood,
+            out string moodHeader,
+            out string fullQuotedLine,
+            out string fullSubtitle)
+        {
+            string dayOpeningLine = HanDialogueCatalog.GetDayOpeningLine(mood);
+            fullQuotedLine = $"„{dayOpeningLine}”";
+            string nightBanner = entry.GetLocalizedTitle().ToUpperInvariant();
+            moodHeader = $"--  {nightBanner}  ·  {HanDialogueCatalog.GetDayMoodTitle(mood)}  --";
+
+            string subtitle = entry.GetLocalizedSubtitle();
+            string continueHint = HanLocalization.Pick(
+                "[SPACE / CLICK] Continue",
+                "[SPACE / CLICK] Continuă",
+                "[SPACE / KATTINTÁS] Tovább");
+            fullSubtitle = string.IsNullOrWhiteSpace(subtitle)
+                ? continueHint
+                : $"{subtitle}   ·   {continueHint}";
+        }
+
+        private void EnsureLanguageButtonUI()
+        {
+            if (_languageSwitchButton == null && mainMenuPanel != null)
+            {
+                Transform existing = mainMenuPanel.transform.Find("LanguageSwitchButton");
+                if (existing != null)
+                {
+                    _languageSwitchButton = existing.GetComponent<Button>();
+                    _languageSwitchButtonText = existing.GetComponentInChildren<TMP_Text>(true);
+                    if (_languageSwitchButtonText != null) ApplyAutoSizeOnce(_languageSwitchButtonText, 10.5f);
+                }
+                else
+                {
+                    CreateArchivalLanguageButton(
+                        mainMenuPanel.transform,
+                        "LanguageSwitchButton",
+                        new Vector2(1f, 1f),
+                        new Vector2(1f, 1f),
+                        new Vector2(1f, 1f),
+                        new Vector2(-36f, -32f),
+                        new Vector2(260f, 44f),
+                        out _languageSwitchButton,
+                        out _languageSwitchButtonText);
+                }
+            }
+
+            EnsureSettingsLanguageButtonUI();
+        }
+
+        private void EnsureSettingsLanguageButtonUI()
+        {
+            if (settingsCardRect == null) return;
+
+            if (_settingsLanguageButton == null)
+            {
+                if (settingsLanguageButton != null)
+                {
+                    _settingsLanguageButton = settingsLanguageButton;
+                    _settingsLanguageButtonText = settingsLanguageButton.GetComponentInChildren<TMP_Text>(true);
+                }
+                else
+                {
+                    Transform existing = settingsCardRect.Find("SettingsLanguageButton");
+                    if (existing != null)
+                    {
+                        _settingsLanguageButton = existing.GetComponent<Button>();
+                        _settingsLanguageButtonText = existing.GetComponentInChildren<TMP_Text>(true);
+                    }
+                    else
+                    {
+                        CreateArchivalLanguageButton(
+                            settingsCardRect,
+                            "SettingsLanguageButton",
+                            new Vector2(0.5f, 0.5f),
+                            new Vector2(0.5f, 0.5f),
+                            new Vector2(0.5f, 0.5f),
+                            new Vector2(0f, -102f),
+                            new Vector2(340f, 44f),
+                            out _settingsLanguageButton,
+                            out _settingsLanguageButtonText);
+                    }
+                }
+            }
+
+            if (_settingsLanguageButtonText != null)
+                ApplyAutoSizeOnce(_settingsLanguageButtonText, 10.5f);
+
+            // Ensure SettingsModalCard has ample vertical room for LowEndModeRow + SettingsLanguageButton + ControlsHint
+            if (settingsCardRect.sizeDelta.y < 615f)
+            {
+                settingsCardRect.sizeDelta = new Vector2(settingsCardRect.sizeDelta.x, 620f);
+                SetAnchoredY(settingsCardRect.Find("MasterVolumeRow"), 142f);
+                SetAnchoredY(settingsCardRect.Find("LookSensitivityRow"), 82f);
+                SetAnchoredY(settingsCardRect.Find("DoorHighlightRow"), 22f);
+                SetAnchoredY(settingsCardRect.Find("LowEndModeRow"), -36f);
+                SetAnchoredY(settingsCardRect.Find("SettingsLanguageButton"), -102f);
+                SetAnchoredY(settingsCardRect.Find("ControlsHint"), 118f);
+                SetAnchoredY(settingsCardRect.Find("SettingsBackButton"), -252f);
+            }
+        }
+
+        private static void SetAnchoredY(Transform tr, float y)
+        {
+            if (tr is RectTransform rt)
+            {
+                rt.anchoredPosition = new Vector2(rt.anchoredPosition.x, y);
+            }
+        }
+
+        private static void CreateArchivalLanguageButton(
+            Transform parent,
+            string objName,
+            Vector2 anchorMin,
+            Vector2 anchorMax,
+            Vector2 pivot,
+            Vector2 anchoredPos,
+            Vector2 size,
+            out Button button,
+            out TMP_Text labelText)
+        {
+            TMP_FontAsset font = HanUITheme.GetProjectFont();
+            GameObject btnObj = new GameObject(objName, typeof(RectTransform), typeof(Image), typeof(Button), typeof(HanTactileButton));
+            btnObj.transform.SetParent(parent, false);
+            RectTransform rt = btnObj.GetComponent<RectTransform>();
+            rt.anchorMin = anchorMin;
+            rt.anchorMax = anchorMax;
+            rt.pivot = pivot;
+            rt.anchoredPosition = anchoredPos;
+            rt.sizeDelta = size;
+
+            Image img = btnObj.GetComponent<Image>();
+            img.sprite = HanUITheme.GetButtonPlateSprite();
+            img.type = Image.Type.Sliced;
+            img.color = HanUITheme.CharcoalSurface;
+
+            Shadow shadow = btnObj.AddComponent<Shadow>();
+            shadow.effectColor = new Color(0.03f, 0.02f, 0.015f, 0.85f);
+            shadow.effectDistance = new Vector2(2f, -3f);
+
+            button = btnObj.GetComponent<Button>();
+            button.targetGraphic = img;
+
+            GameObject lblObj = new GameObject("Label", typeof(RectTransform));
+            lblObj.transform.SetParent(btnObj.transform, false);
+            RectTransform lblRt = lblObj.GetComponent<RectTransform>();
+            lblRt.anchorMin = Vector2.zero;
+            lblRt.anchorMax = Vector2.one;
+            lblRt.offsetMin = new Vector2(12f, 2f);
+            lblRt.offsetMax = new Vector2(-12f, -2f);
+
+            labelText = lblObj.AddComponent<TextMeshProUGUI>();
+            HanUITheme.ApplyCrispSDF(labelText, font);
+            labelText.text = HanLocalization.Get("ui.language_button");
+            labelText.fontSize = 15.5f;
+            labelText.enableAutoSizing = true;
+            labelText.fontSizeMin = 10.5f;
+            labelText.fontSizeMax = 15.5f;
+            labelText.fontStyle = FontStyles.Bold;
+            labelText.alignment = TextAlignmentOptions.Center;
+            labelText.color = HanUITheme.BurnishedGold;
+            labelText.raycastTarget = false;
+
+            HanTactileButton tactile = btnObj.GetComponent<HanTactileButton>();
+            tactile.ConfigureStyle(false, img, null, null, null, labelText, null, shadow, Mathf.Max(120f, size.x - 42f));
+        }
+
+        private void RefreshLocalizedLoopUI()
+        {
+            string langBtnLabel = HanLocalization.Get("ui.language_button");
+            if (_languageSwitchButtonText != null)
+            {
+                _languageSwitchButtonText.text = langBtnLabel;
+                ApplyAutoSizeOnce(_languageSwitchButtonText, 10.5f);
+            }
+            if (_settingsLanguageButtonText != null)
+            {
+                _settingsLanguageButtonText.text = langBtnLabel;
+                ApplyAutoSizeOnce(_settingsLanguageButtonText, 10.5f);
+            }
+
+            SetChildTmpText(mainMenuCardRect, "DossierHeaderTag", "menu.dossier_tag", 10.5f);
+            SetChildTmpText(mainMenuCardRect, "GameTitle", "menu.game_title", 28f);
+            SetChildTmpText(mainMenuCardRect, "GameSubtitle", "menu.game_subtitle", 13f);
+            SetChildTmpText(mainMenuCardRect, "MenuFooterNote", "menu.footer_note", 10f);
+            SetButtonLabel(playButton, "menu.play");
+            SetButtonLabel(settingsButton, "menu.settings");
+            SetButtonLabel(creditsButton, "menu.credits");
+            SetButtonLabel(exitButton, "menu.exit");
+            SetButtonLabel(skipVideoButton, "intro.skip");
+
+            SetChildTmpText(pauseModalCardRect, "PauseDossierTag", "pause.dossier_tag", 10.5f);
+            SetChildTmpText(pauseModalCardRect, "PauseTitle", "pause.title", 24f);
+            SetButtonLabel(resumeButton, "pause.resume");
+            SetButtonLabel(pauseSettingsButton, "pause.settings");
+            SetButtonLabel(pauseExitButton, "pause.exit");
+
+            SetChildTmpText(settingsCardRect, "SettingsTitle", "settings.title", 22f);
+            SetChildTmpText(settingsCardRect, "MasterVolumeRow/Label", "settings.master_volume", 11f);
+            SetChildTmpText(settingsCardRect, "LookSensitivityRow/Label", "settings.look_sensitivity", 11f);
+            SetChildTmpText(settingsCardRect, "DoorHighlightRow/Label", "settings.door_highlight", 11f);
+            SetChildTmpText(settingsCardRect, "LowEndModeRow/Label", "settings.low_end_mode", 11f);
+            SetChildTmpText(settingsCardRect, "ControlsHint", "settings.controls_hint", 10f);
+            SetButtonLabel(settingsBackButton, "ui.return");
+
+            SetChildTmpText(creditsCardRect, "CreditsTitle", "credits.title", 22f);
+            SetChildTmpText(creditsCardRect, "CreditsBody", "credits.body", 13f);
+            SetButtonLabel(creditsBackButton, "ui.return");
+
+            if (CurrentState == GameLoopState.NightTeaser && _activeTeaserNightIndex >= 0)
+            {
+                NightConfigEntry teaserEntry = GetNightEntrySafe(_activeTeaserNightIndex);
+                BuildNightTeaserTexts(teaserEntry, currentEsmeraldaMood, out string moodHeader, out string fullQuotedLine, out string fullSubtitle);
+                if (teaserTitleText != null) teaserTitleText.text = moodHeader;
+                if (teaserHeadlineText != null && !string.IsNullOrEmpty(teaserHeadlineText.text))
+                {
+                    teaserHeadlineText.text = fullQuotedLine;
+                    teaserHeadlineText.ForceMeshUpdate();
+                }
+                if (teaserSubtitleText != null) teaserSubtitleText.text = fullSubtitle;
+            }
+
+            if (hudNightTitleText != null)
+            {
+                NightConfigEntry nightEntry = GetNightEntrySafe(CurrentNightIndex);
+                hudNightTitleText.text = $"[ {nightEntry.GetLocalizedTitle().ToUpperInvariant()} ]";
+                ApplyAutoSizeOnce(hudNightTitleText, 12f);
+            }
+
+            if (hudObjectiveText != null)
+            {
+                hudObjectiveText.text = HanLocalization.Get("hud.objective");
+                ApplyAutoSizeOnce(hudObjectiveText, 11f);
+            }
+        }
+
+        private static void ApplyAutoSizeOnce(TMP_Text tmp, float minSize)
+        {
+            if (tmp == null || tmp.enableAutoSizing) return;
+            float max = tmp.fontSize > 1f ? tmp.fontSize : 18f;
+            tmp.enableAutoSizing = true;
+            tmp.fontSizeMin = Mathf.Min(max, minSize);
+            tmp.fontSizeMax = max;
+        }
+
+        private static void SetChildTmpText(Transform parent, string childPath, string localizationKey, float minFontSize = 11f)
+        {
+            if (parent == null) return;
+            Transform tr = parent.Find(childPath);
+            if (tr == null) return;
+            TMP_Text tmp = tr.GetComponent<TMP_Text>();
+            if (tmp != null)
+            {
+                ApplyAutoSizeOnce(tmp, minFontSize);
+                tmp.text = HanLocalization.Get(localizationKey);
+            }
+        }
+
+        private static void SetButtonLabel(Button btn, string localizationKey)
+        {
+            if (btn == null) return;
+            TMP_Text tmp = btn.GetComponentInChildren<TMP_Text>(true);
+            if (tmp != null)
+            {
+                ApplyAutoSizeOnce(tmp, 11f);
+                tmp.text = HanLocalization.Get(localizationKey);
+            }
         }
 
         private void EnsureLowEndModeToggleUI()
@@ -1168,7 +1626,7 @@ namespace Han.CheckIn
                         TMP_Text lbl = lblTr.GetComponent<TMP_Text>();
                         if (lbl != null)
                         {
-                            lbl.text = "LOW-END PC MODE (LOW RAM / NO GPU) [F8]";
+                            lbl.text = HanLocalization.Get("settings.low_end_mode");
                         }
                     }
 
@@ -1258,6 +1716,16 @@ namespace Han.CheckIn
                 lowEndModeToggle.SetIsOnWithoutNotify(HanLowEndOptimizer.IsLowEndModeEnabled);
                 lowEndModeToggle.onValueChanged.RemoveListener(OnLowEndModeToggled);
                 lowEndModeToggle.onValueChanged.AddListener(OnLowEndModeToggled);
+            }
+            if (_languageSwitchButton != null)
+            {
+                _languageSwitchButton.onClick.RemoveListener(OnLanguageSwitchButtonClicked);
+                _languageSwitchButton.onClick.AddListener(OnLanguageSwitchButtonClicked);
+            }
+            if (_settingsLanguageButton != null)
+            {
+                _settingsLanguageButton.onClick.RemoveListener(OnLanguageSwitchButtonClicked);
+                _settingsLanguageButton.onClick.AddListener(OnLanguageSwitchButtonClicked);
             }
         }
 
@@ -1434,29 +1902,37 @@ namespace Han.CheckIn
 
         private static bool WasSkipKeyPressed()
         {
-            if (Keyboard.current != null)
-            {
-                if (Keyboard.current.spaceKey.wasPressedThisFrame ||
-                    Keyboard.current.enterKey.wasPressedThisFrame ||
-                    Keyboard.current.escapeKey.wasPressedThisFrame)
-                {
-                    return true;
-                }
-            }
+            if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
+                return true;
 
-            if (Gamepad.current != null && Gamepad.current.buttonSouth.wasPressedThisFrame)
+            if (Gamepad.current != null && Gamepad.current.buttonEast.wasPressedThisFrame)
                 return true;
 
             try
             {
-                if (Input.GetKeyDown(KeyCode.Space) ||
-                    Input.GetKeyDown(KeyCode.Return) ||
-                    Input.GetKeyDown(KeyCode.Escape))
-                {
+                if (Input.GetKeyDown(KeyCode.Escape))
                     return true;
-                }
             }
             catch { }
+
+            return false;
+        }
+
+        private static bool WasTeaserAdvancePressed()
+        {
+            if (Keyboard.current != null)
+            {
+                if (Keyboard.current.spaceKey.wasPressedThisFrame ||
+                    Keyboard.current.enterKey.wasPressedThisFrame ||
+                    Keyboard.current.numpadEnterKey.wasPressedThisFrame)
+                    return true;
+            }
+
+            if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
+                return true;
+
+            if (Gamepad.current != null && Gamepad.current.buttonSouth.wasPressedThisFrame)
+                return true;
 
             return false;
         }

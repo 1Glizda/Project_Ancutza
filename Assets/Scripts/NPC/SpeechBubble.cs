@@ -31,6 +31,20 @@ public class SpeechBubble : MonoBehaviour
     [SerializeField] private float popOutDuration = 0.15f;
     [SerializeField] private float interactiveTypewriterSpeed = 55f;
 
+    [Header("Typing Sound Cadence")]
+    [Tooltip("When enabled, inherits chars-per-tick and cadence multiplier from HanUIAudioManager.")]
+    [SerializeField] private bool useGlobalAudioCadence = true;
+    [Tooltip("Play a typing tick every N characters (when not overridden by global audio settings).")]
+    [Range(1, 8)] [SerializeField] private int charsPerSoundTick = 2;
+    [Tooltip("Minimum seconds between sound ticks (0 = inherit from HanUIAudioManager).")]
+    [Range(0f, 0.25f)] [SerializeField] private float minSoundInterval = 0f;
+    [Tooltip("Pitch multiplier for speech bubble typing sounds.")]
+    [Range(0.5f, 1.8f)] [SerializeField] private float soundPitchScale = 1.0f;
+    [Tooltip("Volume multiplier for speech bubble typing sounds.")]
+    [Range(0f, 2f)] [SerializeField] private float soundVolumeScale = 1.0f;
+    [Tooltip("Delay multiplier when revealing punctuation during speech bubble typing.")]
+    [Range(1f, 5f)] [SerializeField] private float punctuationPauseMultiplier = 2.0f;
+
     private Canvas _canvas;
     private CanvasGroup _canvasGroup;
     private RectTransform _canvasRect;
@@ -73,8 +87,30 @@ public class SpeechBubble : MonoBehaviour
     private static readonly Color HoverPromptPlateColor = new Color(0.68f, 0.23f, 0.17f, 1.0f);
     private static readonly Color PressedPromptPlateColor = HanUITheme.PressedCrimson;
 
+    private bool _usesDefaultGoOnLabel = true;
+
     public bool IsInteractiveActive => _isInteractive && _canvas != null && _canvas.gameObject.activeInHierarchy;
     public RectTransform GoOnButtonRect => _goOnButtonRect;
+
+    private void OnEnable()
+    {
+        HanLocalization.OnLanguageChanged += HandleLanguageChanged;
+        HandleLanguageChanged(HanLocalization.CurrentLanguage);
+    }
+
+    private void OnDisable()
+    {
+        HanLocalization.OnLanguageChanged -= HandleLanguageChanged;
+    }
+
+    private void HandleLanguageChanged(HanLanguage _)
+    {
+        UpdateSpeakerHeader();
+        if (_goOnButtonText != null && _usesDefaultGoOnLabel)
+        {
+            _goOnButtonText.text = HanLocalization.Get("director.btn_go_on");
+        }
+    }
 
     private void Awake()
     {
@@ -106,7 +142,7 @@ public class SpeechBubble : MonoBehaviour
         canvasObj.AddComponent<GraphicRaycaster>();
 
         _canvasRect = canvasObj.GetComponent<RectTransform>();
-        _canvasRect.sizeDelta = new Vector2(320f, 172f);
+        _canvasRect.sizeDelta = new Vector2(368f, 198f);
         _canvasRect.localScale = Vector3.one * baseWorldScale;
 
         // 2. Animated Card Root (for pop-in scale & vertical slide tween)
@@ -154,7 +190,10 @@ public class SpeechBubble : MonoBehaviour
         headerObj.transform.SetParent(bgObj.transform, false);
         _headerText = headerObj.AddComponent<TextMeshProUGUI>();
         HanUITheme.ApplyCrispSDF(_headerText, font);
-        _headerText.text = "[ TRAVELER STATEMENT ]";
+        _headerText.text = HanLocalization.Get("bubble.default_header");
+        _headerText.enableAutoSizing = true;
+        _headerText.fontSizeMin = 9f;
+        _headerText.fontSizeMax = 11.5f;
         _headerText.alignment = TextAlignmentOptions.Center;
         _headerText.fontSize = 11.5f;
         _headerText.fontStyle = FontStyles.Bold | FontStyles.UpperCase;
@@ -189,6 +228,9 @@ public class SpeechBubble : MonoBehaviour
         HanUITheme.ApplyCrispSDF(_textComponent, font);
         _textComponent.alignment = TextAlignmentOptions.Center;
         _textComponent.fontSize = 16.5f;
+        _textComponent.enableAutoSizing = true;
+        _textComponent.fontSizeMin = 10.5f;
+        _textComponent.fontSizeMax = 16.5f;
         _textComponent.color = HanUITheme.WarmParchment;
         _textComponent.raycastTarget = false;
 
@@ -225,7 +267,7 @@ public class SpeechBubble : MonoBehaviour
         _goOnButtonRect.pivot = new Vector2(0.5f, 0f);
         _goOnBaseAnchoredPos = new Vector2(0f, 2f);
         _goOnButtonRect.anchoredPosition = _goOnBaseAnchoredPos;
-        _goOnButtonRect.sizeDelta = new Vector2(148f, 36f);
+        _goOnButtonRect.sizeDelta = new Vector2(176f, 36f);
 
         // Left Brass Index Tab on "Go on" Button
         GameObject leftTabObj = new GameObject("LeftBrassTab");
@@ -258,10 +300,13 @@ public class SpeechBubble : MonoBehaviour
         btnTextObj.transform.SetParent(_goOnButtonObj.transform, false);
         _goOnButtonText = btnTextObj.AddComponent<TextMeshProUGUI>();
         HanUITheme.ApplyCrispSDF(_goOnButtonText, font);
-        _goOnButtonText.text = "Go on >>";
+        _goOnButtonText.text = HanLocalization.Get("director.btn_go_on");
         _goOnButtonText.alignment = TextAlignmentOptions.Center;
         _goOnButtonText.fontStyle = FontStyles.Bold;
         _goOnButtonText.fontSize = 15.5f;
+        _goOnButtonText.enableAutoSizing = true;
+        _goOnButtonText.fontSizeMin = 10.5f;
+        _goOnButtonText.fontSizeMax = 15.5f;
         _goOnButtonText.color = HanUITheme.WarmParchment;
         _goOnButtonText.raycastTarget = false;
 
@@ -436,7 +481,7 @@ public class SpeechBubble : MonoBehaviour
     /// Shows an interactive archival transcript card anchored directly above the character
     /// with a tactile "Go on" or "Approve" stamp button below it.
     /// </summary>
-    public void ShowInteractiveDialogue(string text, Action onGoOnClicked, string buttonLabel = "Go on >>")
+    public void ShowInteractiveDialogue(string text, Action onGoOnClicked, string buttonLabel = null, string speakerHeaderOverride = null)
     {
         if (_currentCoroutine != null)
         {
@@ -449,16 +494,19 @@ public class SpeechBubble : MonoBehaviour
             _pressRoutine = null;
         }
 
-        UpdateSpeakerHeader();
+        UpdateSpeakerHeader(speakerHeaderOverride);
 
         _isInteractive = true;
         _isPressingGoOn = false;
         _wasHovered = false;
         _onGoOnCallback = onGoOnClicked;
 
+        _usesDefaultGoOnLabel = string.IsNullOrEmpty(buttonLabel) || buttonLabel == "Go on >>";
         if (_goOnButtonText != null)
         {
-            _goOnButtonText.text = buttonLabel;
+            _goOnButtonText.text = _usesDefaultGoOnLabel
+                ? HanLocalization.Get("director.btn_go_on")
+                : buttonLabel;
         }
 
         if (_goOnButtonObj != null) _goOnButtonObj.SetActive(true);
@@ -571,17 +619,27 @@ public class SpeechBubble : MonoBehaviour
         }
     }
 
-    private void UpdateSpeakerHeader()
+    private void UpdateSpeakerHeader(string speakerOverride = null)
     {
         if (_headerText == null) return;
+        if (!string.IsNullOrWhiteSpace(speakerOverride))
+        {
+            _headerText.text = $"[ {speakerOverride.Trim().ToUpperInvariant()} ]";
+            _headerText.color = string.Equals(speakerOverride.Trim(), "ESMERALDA", StringComparison.OrdinalIgnoreCase)
+                ? HanUITheme.BurnishedGold
+                : HanUITheme.SubduedBrass;
+            return;
+        }
+
         NPCController npc = GetComponentInParent<NPCController>();
+        _headerText.color = HanUITheme.SubduedBrass;
         if (npc != null && npc.Guest != null && !string.IsNullOrWhiteSpace(npc.Guest.guestName))
         {
             _headerText.text = $"[ {npc.Guest.guestName.ToUpperInvariant()} ]";
         }
         else
         {
-            _headerText.text = "[ TRAVELER STATEMENT ]";
+            _headerText.text = HanLocalization.Get("bubble.default_header");
         }
     }
 
@@ -651,6 +709,20 @@ public class SpeechBubble : MonoBehaviour
         _tweenCoroutine = null;
     }
 
+    private int ResolveCharsPerSoundTick()
+    {
+        return useGlobalAudioCadence
+            ? HanUIAudioManager.GetConfiguredCharsPerTick(charsPerSoundTick)
+            : Mathf.Clamp(charsPerSoundTick, 1, 8);
+    }
+
+    private float ResolvePunctuationMultiplier()
+    {
+        return useGlobalAudioCadence
+            ? HanUIAudioManager.GetConfiguredPunctuationMultiplier(punctuationPauseMultiplier)
+            : Mathf.Max(1f, punctuationPauseMultiplier);
+    }
+
     private IEnumerator TypewriteInteractiveTranscriptRoutine(string text)
     {
         if (_textComponent == null) yield break;
@@ -666,20 +738,31 @@ public class SpeechBubble : MonoBehaviour
             yield break;
         }
 
-        float cps = Mathf.Max(20f, interactiveTypewriterSpeed);
-        float visible = 0f;
-        int lastTickChar = -2;
+        float cps = Mathf.Max(12f, interactiveTypewriterSpeed);
+        float baseDelay = 1f / cps;
+        float timer = 0f;
+        int currentCount = 0;
+        int lastTickChar = -ResolveCharsPerSoundTick();
 
-        while (visible < totalChars)
+        while (currentCount < totalChars)
         {
-            visible += Time.unscaledDeltaTime * cps;
-            int currentCount = Mathf.Clamp(Mathf.FloorToInt(visible), 0, totalChars);
-            _textComponent.maxVisibleCharacters = currentCount;
-
-            if (currentCount - lastTickChar >= 2)
+            timer -= Time.unscaledDeltaTime;
+            while (timer <= 0f && currentCount < totalChars)
             {
-                lastTickChar = currentCount;
-                HanUIAudioManager.PlayTypewriterTick();
+                char c = _textComponent.textInfo.characterInfo[currentCount].character;
+                currentCount++;
+                _textComponent.maxVisibleCharacters = currentCount;
+
+                int tickStep = ResolveCharsPerSoundTick();
+                if (!char.IsWhiteSpace(c) && (currentCount - lastTickChar >= tickStep))
+                {
+                    lastTickChar = currentCount;
+                    float intervalOverride = minSoundInterval > 0f ? minSoundInterval : -1f;
+                    HanUIAudioManager.PlayTypewriterTick(c, soundPitchScale, soundVolumeScale, intervalOverride);
+                }
+
+                float pauseMult = HanUIAudioManager.IsPunctuationChar(c) ? ResolvePunctuationMultiplier() : 1f;
+                timer += baseDelay * pauseMult;
             }
 
             yield return null;
@@ -711,12 +794,22 @@ public class SpeechBubble : MonoBehaviour
 
         if (charsPerSecond <= 0) charsPerSecond = 30f;
         float delay = 1f / charsPerSecond;
+        int lastTickChar = -ResolveCharsPerSoundTick();
 
         for (int i = 1; i <= totalChars; i++)
         {
             _textComponent.maxVisibleCharacters = i;
-            if (i % 3 == 0) HanUIAudioManager.PlayTypewriterTick();
-            yield return new WaitForSeconds(delay);
+            char c = _textComponent.textInfo.characterInfo[i - 1].character;
+            int tickStep = ResolveCharsPerSoundTick();
+            if (!char.IsWhiteSpace(c) && (i - lastTickChar >= tickStep))
+            {
+                lastTickChar = i;
+                float intervalOverride = minSoundInterval > 0f ? minSoundInterval : -1f;
+                HanUIAudioManager.PlayTypewriterTick(c, soundPitchScale, soundVolumeScale, intervalOverride);
+            }
+
+            float pauseMult = HanUIAudioManager.IsPunctuationChar(c) ? ResolvePunctuationMultiplier() : 1f;
+            yield return new WaitForSeconds(delay * pauseMult);
         }
 
         _textComponent.maxVisibleCharacters = 99999;
