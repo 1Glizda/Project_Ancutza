@@ -1114,7 +1114,14 @@ namespace Han.CheckIn
             for (int i = 0; i < stableHorses.Count; i++)
             {
                 if (stableHorses[i] != null)
-                    stableHorses[i].SetActive(i < horseCount);
+                {
+                    bool shouldSpawn = i < horseCount;
+                    stableHorses[i].SetActive(shouldSpawn);
+                    if (shouldSpawn)
+                    {
+                        EnsureHorseBodyVisible(stableHorses[i]);
+                    }
+                }
             }
             Debug.Log($"[Han] Nightfall: {horseCount} of {stableHorses.Count} stable horse(s) spawned in the courtyard barn.");
 
@@ -1639,6 +1646,51 @@ namespace Han.CheckIn
                     }
                 }
                 stableHorses.Sort((a, b) => a.name.CompareTo(b.name));
+            }
+
+            for (int i = 0; i < stableHorses.Count; i++)
+            {
+                if (stableHorses[i] != null)
+                {
+                    EnsureHorseBodyVisible(stableHorses[i]);
+                }
+            }
+        }
+
+        private static void EnsureHorseBodyVisible(GameObject horse)
+        {
+            if (horse == null) return;
+
+            var skinnedRenderers = horse.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+            for (int i = 0; i < skinnedRenderers.Length; i++)
+            {
+                var smr = skinnedRenderers[i];
+                if (smr == null) continue;
+                if (!smr.gameObject.activeSelf) smr.gameObject.SetActive(true);
+                smr.enabled = true;
+                smr.updateWhenOffscreen = true;
+            }
+
+            var meshRenderers = horse.GetComponentsInChildren<MeshRenderer>(true);
+            for (int i = 0; i < meshRenderers.Length; i++)
+            {
+                var mr = meshRenderers[i];
+                if (mr == null) continue;
+                if (!mr.gameObject.activeSelf) mr.gameObject.SetActive(true);
+                mr.enabled = true;
+            }
+
+            if (horse.activeInHierarchy)
+            {
+                var animators = horse.GetComponentsInChildren<Animator>(true);
+                for (int i = 0; i < animators.Length; i++)
+                {
+                    if (animators[i] != null)
+                    {
+                        animators[i].cullingMode = AnimatorCullingMode.AlwaysAnimate;
+                        animators[i].Update(0f);
+                    }
+                }
             }
         }
 
